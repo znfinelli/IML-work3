@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+
 from typing import Optional
 
 
@@ -9,7 +10,7 @@ class KMeans:
     
     """
     
-    def __init__(self, n_clusters: int, max_iters: int = 300, tol: float = 1e-4, random_state: Optional[int] = None):
+    def __init__(self, n_clusters: int, max_iters: int = 300, tol: float = 1e-4, metric: str = 'euclidean', random_state: Optional[int] = None):
         """
         Initialize K-Means clustering.
         
@@ -21,16 +22,22 @@ class KMeans:
             Maximum number of iterations
         tol : float, default=1e-4
             Tolerance for convergence (change in centroids)
+        metric : str, default='euclidean'
+            Distance metric to use. Options: 'euclidean', 'manhattan'
         random_state : int, optional
             Random seed for reproducibility
         """
         self.n_clusters = n_clusters
         self.max_iters = max_iters
         self.tol = tol
+        self.metric = metric
         self.random_state = random_state
         self.centroids = None
         self.labels_ = None
         self.inertia_ = None
+        
+        if self.metric not in ['euclidean', 'manhattan']:
+            raise ValueError(f"Metric '{self.metric}' not supported. Choose 'euclidean' or 'manhattan'.")
         
     def _initialize_centroids(self, X: np.ndarray) -> np.ndarray:
         """
@@ -62,7 +69,7 @@ class KMeans:
     
     def _compute_distances(self, X: np.ndarray, centroids: np.ndarray) -> np.ndarray:
         """
-        Compute squared Euclidean distances from each point to each centroid.
+        Compute distances from each point to each centroid using the specified metric.
         
         Parameters:
         -----------
@@ -76,9 +83,15 @@ class KMeans:
         np.ndarray
             Distance matrix of shape (n_samples, n_clusters)
         """
-        # Compute squared Euclidean distances using broadcasting
-        # (X - centroids)^2 for each combination
-        distances = np.sum((X[:, np.newaxis, :] - centroids[np.newaxis, :, :]) ** 2, axis=2)
+        if self.metric == 'euclidean':
+            # Compute squared Euclidean distances using broadcasting
+            # (X - centroids)^2 for each combination
+            distances = np.sum((X[:, np.newaxis, :] - centroids[np.newaxis, :, :]) ** 2, axis=2)
+        elif self.metric == 'manhattan':
+            # Compute Manhattan (L1) distances
+            # |X - centroids| for each combination
+            distances = np.sum(np.abs(X[:, np.newaxis, :] - centroids[np.newaxis, :, :]), axis=2)
+            
         return distances
     
     def _assign_clusters(self, X: np.ndarray, centroids: np.ndarray) -> np.ndarray:
@@ -155,8 +168,12 @@ class KMeans:
         for k in range(self.n_clusters):
             cluster_points = X[labels == k]
             if len(cluster_points) > 0:
-                # Sum of squared distances from points to their centroid
-                inertia += np.sum((cluster_points - centroids[k]) ** 2)
+                if self.metric == 'euclidean':
+                    # Sum of squared distances from points to their centroid
+                    inertia += np.sum((cluster_points - centroids[k]) ** 2)
+                elif self.metric == 'manhattan':
+                    # Sum of Manhattan distances
+                    inertia += np.sum(np.abs(cluster_points - centroids[k]))
         return inertia
     
     def fit(self, X):
@@ -177,7 +194,7 @@ class KMeans:
         if isinstance(X, pd.DataFrame):
             X = X.values
         X = np.array(X)
-        
+
         # Initialize centroids
         self.centroids = self._initialize_centroids(X)
         
@@ -192,10 +209,14 @@ class KMeans:
             # Check for convergence
             centroid_shift = np.sum((new_centroids - self.centroids) ** 2)
             
+            # Update centroids
+            self.centroids = new_centroids
+
+            # Check for convergence
             if centroid_shift < self.tol:
                 break
             
-            self.centroids = new_centroids
+            
         
         # Store final labels and compute inertia
         self.labels_ = self._assign_clusters(X, self.centroids)
@@ -255,8 +276,9 @@ if __name__ == "__main__":
     # Generate sample data
     X, y_true = make_blobs(n_samples=300, centers=4, n_features=2, random_state=42)
     
+    print("Testing Euclidean Metric:")
     # Create and fit K-Means model
-    kmeans = KMeans(n_clusters=4, random_state=42)
+    kmeans = KMeans(n_clusters=4, metric='euclidean', random_state=42)
     labels = kmeans.fit_predict(X)
     
     print(f"Number of clusters: {kmeans.n_clusters}")
@@ -264,4 +286,15 @@ if __name__ == "__main__":
     print(f"Centroids shape: {kmeans.centroids.shape}")
     print(f"Labels shape: {labels.shape}")
     print(f"Unique labels: {np.unique(labels)}")
+    
+    print("\nTesting Manhattan Metric:")
+    # Create and fit K-Means model
+    kmeans_manhattan = KMeans(n_clusters=4, metric='manhattan', random_state=42)
+    labels_manhattan = kmeans_manhattan.fit_predict(X)
+    
+    print(f"Number of clusters: {kmeans_manhattan.n_clusters}")
+    print(f"Inertia: {kmeans_manhattan.inertia_:.2f}")
+    print(f"Centroids shape: {kmeans_manhattan.centroids.shape}")
+    print(f"Labels shape: {labels_manhattan.shape}")
+    print(f"Unique labels: {np.unique(labels_manhattan)}")
 
