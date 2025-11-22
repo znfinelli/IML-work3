@@ -82,20 +82,34 @@ def handle_missing_values(
 ) -> pd.DataFrame:
     """
     Imputes missing values in the DataFrame:
-      - Numeric columns: median
-      - Categorical columns: mode (most frequent value)
+      - numeric columns: median
+      - categorical columns: mode (most frequent value)
     """
     df = df.copy()
 
+    # 1. Replace '?' (common in UCI datasets like Mushroom/Adult) with NaN
+    df.replace('?', np.nan, inplace=True, regex=False)
+    
+    # Also replace empty strings if any exist
+    df.replace('', np.nan, inplace=True, regex=False)
+
+    # 2. Handle Numeric Columns
     for col in numeric_cols:
         if df[col].isnull().any():
             median_value = df[col].median()
             df[col] = df[col].fillna(median_value)
 
+    # 3. Handle Categorical Columns
     for col in categorical_cols:
         if df[col].isnull().any():
-            mode_value = df[col].mode()[0]
-            df[col] = df[col].fillna(mode_value)
+            # Get the mode (most frequent value)
+            mode_series = df[col].mode()
+            if not mode_series.empty:
+                mode_value = mode_series[0]
+                df[col] = df[col].fillna(mode_value)
+            else:
+                # Fallback if a column is completely empty (rare)
+                df[col] = df[col].fillna("Missing")
 
     return df
 
@@ -116,7 +130,7 @@ def preprocess_single_arff(
       1. Load full dataset (no folds).
       2. Identify class column (default: last column).
       3. Detect numeric and categorical feature columns (excluding class).
-      4. Impute missing values.
+      4. Impute missing values (handling '?' correctly).
       5. Label-encode categorical feature columns (NOT the class).
       6. Optionally label-encode the class column and return y.
       7. Scale numeric feature columns to [0, 1] with MinMaxScaler.
@@ -159,7 +173,7 @@ def preprocess_single_arff(
     # 3) Identify numeric vs. categorical feature columns
     numeric_cols, categorical_cols = identify_column_types(df, class_column)
 
-    # 4) Handle missing values
+    # 4) Handle missing values (includes replacing '?' with NaN)
     df = handle_missing_values(df, numeric_cols, categorical_cols)
 
     # 5) Encode categorical feature columns (NOT the class)
@@ -169,7 +183,7 @@ def preprocess_single_arff(
             # class is handled separately below
             continue
         le = LabelEncoder()
-        df[col] = le.fit_transform(df[col])
+        df[col] = le.fit_transform(df[col].astype(str)) # astype(str) ensures safety
         feature_encoders[col] = le
 
     # 6) Optionally encode the class column
@@ -178,7 +192,7 @@ def preprocess_single_arff(
         class_encoder: Optional[LabelEncoder] = None
     else:
         class_encoder = LabelEncoder()
-        df[class_column] = class_encoder.fit_transform(df[class_column])
+        df[class_column] = class_encoder.fit_transform(df[class_column].astype(str))
         y = df[class_column].values
 
     # 7) Normalize numeric feature columns to [0, 1]
