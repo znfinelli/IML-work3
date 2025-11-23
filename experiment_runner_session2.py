@@ -42,7 +42,7 @@ DATASETS_MAP = {
     "mushroom": "datasets/mushroom.arff",
 }
 
-N_CLUSTERS_LIST = [2, 3, 4, 5]
+N_CLUSTERS_LIST = list(range(2, 11))
 METRICS = ["euclidean", "manhattan"]
 FUZZY_M = [1.5, 2.0, 2.5]
 N_RUNS = 10
