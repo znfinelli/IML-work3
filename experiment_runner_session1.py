@@ -1,198 +1,171 @@
-
 import os
 import time
-from typing import List, Dict, Optional
-
+import datetime
+import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from typing import List, Dict, Any
 
+# Local Imports
 from parser import preprocess_single_arff
-from agg_clustering import run_agglomerative_once
-from gmm_clustering import run_gmm_once
 from clustering_metrics import compute_clustering_metrics
 
+# Session 1 Algorithms
+from agg_clustering import run_agglomerative_once
+from gmm_clustering import run_gmm_once
 
-def main():
-    # 🔧 Adjust these paths / class-column names to your actual files
-    DATASETS = [
-        {
-            "name": "pen-based",
-            "path": "datasets/pen-based.arff",
-            "class_column": None,  # or e.g. "class". If labels are not in the last clomun, specify here
-        },
-        {
-            "name": "adult",
-            "path": "datasets/adult.arff",
-            "class_column": None,
-        },
-        {
-            "name": "iris",
-            "path": "datasets/iris.arff",
-            "class_column": None,
-        },
-    ]
+# ---------------------------------------------------------
+# CONFIGURATION
+# ---------------------------------------------------------
+RUN_CONFIG = {
+    "datasets": {
+        "pen-based": True,
+        "adult": True,
+        "mushroom": True
+    },
+    "algorithms": {
+        "Agglomerative": True,
+        "GMM": True
+    }
+}
 
-    # Common configuration for ALL datasets (you can specialize later)
-    agg_n_clusters = [2, 3, 4]
-    agg_metrics = ["euclidean", "cosine"]
-    agg_linkages = ["complete", "average", "single"]
+DATASETS_MAP = {
+    "pen-based": "datasets/pen-based.arff",
+    "adult":     "datasets/adult.arff",
+    "mushroom":  "datasets/mushroom.arff",
+}
 
-    gmm_n_components = [2, 3, 4]
-    gmm_inits = ["kmeans", "random_from_data"]
+# Global Parameters
+N_CLUSTERS_LIST = list(range(2, 11)) # [cite: 2389]
+METRICS = ["euclidean", "manhattan"] 
+N_RUNS = 10 # Simulating folds [cite: 2374]
+PARTIAL_SAVE_INTERVAL = 2 
 
-    jobs_per_dataset = (
-        len(agg_n_clusters) * len(agg_metrics) * len(agg_linkages)
-        + len(gmm_n_components) * len(gmm_inits)
-    )
-    total_jobs = jobs_per_dataset * len(DATASETS)
+# ---------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------
+def generate_task_list():
+    tasks = []
+    for ds_name, ds_enabled in RUN_CONFIG["datasets"].items():
+        if not ds_enabled: continue
+        
+        # 1. Agglomerative Tasks [cite: 2380-2381]
+        if RUN_CONFIG["algorithms"]["Agglomerative"]:
+            for k in N_CLUSTERS_LIST:
+                for link in ["complete", "average", "single"]:
+                    for metric in METRICS:
+                        tasks.append({
+                            "type": "agg",
+                            "dataset": ds_name,
+                            "n_clusters": k,
+                            "linkage": link,
+                            "metric": metric
+                        })
 
-    print(f"Total datasets: {len(DATASETS)}")
-    print(f"Experiments per dataset: {jobs_per_dataset}")
-    print(f"Total experiments (all datasets): {total_jobs}\n")
-
-    os.makedirs("results_session1", exist_ok=True)
-
-    global_results: List[Dict] = []
-    global_start = time.perf_counter()
-    global_job_counter = 0
-
-    # ================== MAIN LOOP OVER DATASETS ==================
-    for ds_cfg in DATASETS:
-        ds_name = ds_cfg["name"]
-        arff_path = ds_cfg["path"]
-        class_col: Optional[str] = ds_cfg["class_column"]
-
-        print(f"\n=== Dataset: {ds_name} ===")
-        print(f"Loading from: {arff_path}")
-
-        # Load + preprocess. IMPORTANT: keep labels for metrics.
-        X, y, info = preprocess_single_arff(
-            filepath=arff_path,
-            class_column=class_col,
-            drop_class=False,
-        )
-        print(f"  -> X shape: {X.shape}, y shape: {None if y is None else y.shape}")
-
-        dataset_results: List[Dict] = []
-
-        # Build job list for THIS dataset
-        local_jobs: List[Dict] = []
-
-        for k in agg_n_clusters:
-            for metric in agg_metrics:
-                for linkage in agg_linkages:
-                    local_jobs.append({
-                        "type": "agglo",
+        # 2. GMM Tasks [cite: 2382-2384]
+        if RUN_CONFIG["algorithms"]["GMM"]:
+            for k in N_CLUSTERS_LIST:
+                for seed in range(N_RUNS):
+                    tasks.append({
+                        "type": "gmm",
+                        "dataset": ds_name,
                         "n_clusters": k,
-                        "metric": metric,
-                        "linkage": linkage,
+                        "init_params": "kmeans", # Can vary this if needed
+                        "run_id": seed
                     })
+    return tasks
 
-        for k in gmm_n_components:
-            for init in gmm_inits:
-                local_jobs.append({
-                    "type": "gmm",
-                    "n_components": k,
-                    "init_params": init,
-                })
+def save_dataframe(data, folder, filename):
+    if not data: return
+    pd.DataFrame(data).to_csv(os.path.join(folder, filename), index=False)
 
-        print(f"  -> Experiments for {ds_name}: {len(local_jobs)}")
+# ---------------------------------------------------------
+# Main Execution Loop
+# ---------------------------------------------------------
+def main():
+    session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_dir = f"results_session1/run_{session_id}"
+    dirs = [
+        base_dir,
+        os.path.join(base_dir, "partial"),
+        os.path.join(base_dir, "by_dataset"),
+        os.path.join(base_dir, "by_algorithm")
+    ]
+    for d in dirs: os.makedirs(d, exist_ok=True)
+    
+    print(f"Session 1 Runner Started: {session_id}")
+    print("Generating task list...")
+    all_tasks = generate_task_list()
+    
+    if not all_tasks:
+        print("No tasks configured.")
+        return
 
-        # ---- Run all jobs for this dataset ----
-        for local_idx, job in enumerate(local_jobs, start=1):
-            global_job_counter += 1
-            run_start = time.perf_counter()
+    global_results = []
+    current_ds_results = []
+    current_ds_name = None
+    X, y = None, None
+    
+    pbar = tqdm(all_tasks, unit="exp")
+    
+    for i, task in enumerate(pbar):
+        ds_name = task["dataset"]
+        desc = f"{ds_name} | {task.get('type')} | k={task['n_clusters']}"
+        pbar.set_description(f"{desc:<40}")
 
-            # Run algorithm
-            if job["type"] == "agglo":
+        # Load Data
+        if ds_name != current_ds_name:
+            if current_ds_name and current_ds_results:
+                save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
+                current_ds_results = []
+            try:
+                X, y, _ = preprocess_single_arff(DATASETS_MAP[ds_name], drop_class=False)
+                current_ds_name = ds_name
+            except Exception as e:
+                pbar.write(f"Error loading {ds_name}: {e}")
+                continue
+
+        start_time = time.perf_counter()
+        res = {}
+        
+        try:
+            if task["type"] == "agg":
                 res = run_agglomerative_once(
-                    X=X,
-                    n_clusters=job["n_clusters"],
-                    metric=job["metric"],
-                    linkage=job["linkage"],
-                    dataset_name=ds_name,
+                    X, task["n_clusters"], task["metric"], task["linkage"], ds_name
                 )
-            else:  # GMM
-                res = run_gmm_once(
-                    X=X,
-                    n_components=job["n_components"],
-                    init_params=job["init_params"],
-                    dataset_name=ds_name,
-                )
+            elif task["type"] == "gmm":
+                res = run_gmm_once(X, task["n_clusters"], task["init_params"], ds_name)
+                res["run_id"] = task["run_id"]
 
-            run_time = time.perf_counter() - run_start
+            # Metrics
+            res["runtime"] = time.perf_counter() - start_time
+            if y is not None and "labels" in res:
+                res.update(compute_clustering_metrics(X, y, res["labels"]))
+                del res["labels"]
+            
+            global_results.append(res)
+            current_ds_results.append(res)
 
-            # Compute metrics if labels exist
-            labels = res["labels"]
-            if y is not None:
-                metric_dict = compute_clustering_metrics(X, y, labels)
-            else:
-                metric_dict = {
-                    "ari": None,
-                    "purity": None,
-                    "davies_bouldin": None,
-                    "f_measure": None,
-                }
+        except Exception as e:
+            pbar.write(f"Task failed: {task} Error: {e}")
 
-            # Strip labels but keep everything else
-            row = {k: v for k, v in res.items() if k != "labels"}
-            row.update(metric_dict)
+        # Partial Save
+        if (i + 1) % PARTIAL_SAVE_INTERVAL == 0:
+             save_dataframe(global_results, dirs[1], f"partial_{session_id}.csv")
 
-            dataset_results.append(row)
-            global_results.append(row)
-
-            # Global ETA
-            elapsed_global = time.perf_counter() - global_start
-            avg_per_job = elapsed_global / global_job_counter
-            remaining_jobs = total_jobs - global_job_counter
-            eta_sec = avg_per_job * remaining_jobs
-
-            print(
-                f"[{ds_name}] "
-                f"[{local_idx}/{len(local_jobs)}] "
-                f"{res['algorithm']} done in {run_time:.2f}s | "
-                f"Global progress {global_job_counter}/{total_jobs} | "
-                f"Global ETA ~ {eta_sec:.1f}s"
-            )
-
-        # ---- Save per-dataset CSV (ALL algorithms together) ----
-        ds_df = pd.DataFrame(dataset_results)
-        ds_out_path = os.path.join("results_session1", f"{ds_name}_session1.csv")
-        ds_df.to_csv(ds_out_path, index=False)
-        print(f"  -> Saved results for {ds_name} to: {ds_out_path}")
-
-        # ---- Additionally: split BY ALGORITHM for this dataset ----
-        for algo in ds_df["algorithm"].unique():
-            algo_df = ds_df[ds_df["algorithm"] == algo].copy()
-
-            # Drop irrelevant columns for readability
-            if algo == "Agglomerative":
-                drop_cols = ["n_components", "init_params", "bic", "avg_log_likelihood"]
-            elif algo == "GaussianMixture":
-                drop_cols = ["n_clusters", "metric", "linkage"]
-            else:
-                drop_cols = []
-
-            for c in drop_cols:
-                if c in algo_df.columns:
-                    algo_df.drop(columns=c, inplace=True)
-
-            algo_out_path = os.path.join(
-                "results_session1",
-                f"{ds_name}_{algo}_session1.csv"
-            )
-            algo_df.to_csv(algo_out_path, index=False)
-            print(f"  -> Saved {algo} results for {ds_name} to: {algo_out_path}")
-
-
-    # ================== AFTER ALL DATASETS ==================
-    global_df = pd.DataFrame(global_results)
-    global_out_path = os.path.join("results_session1", "ALL_DATASETS_session1.csv")
-    global_df.to_csv(global_out_path, index=False)
-
-    total_time = time.perf_counter() - global_start
-    print(f"\n=== All Session 1 experiments finished in {total_time:.1f}s ===")
-    print(f"Global CSV saved to: {global_out_path}")
-
+    # Final Saves
+    if current_ds_results:
+        save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
+    
+    if global_results:
+        df_final = pd.DataFrame(global_results)
+        df_final.to_csv(os.path.join(base_dir, "session1_final_results.csv"), index=False)
+        
+        for algo in df_final['algorithm'].unique():
+            safe_name = algo.replace(" ", "_")
+            save_dataframe(df_final[df_final['algorithm'] == algo], dirs[3], f"{safe_name}.csv")
+            
+        print(f"\nSession 1 Complete. Results in {base_dir}")
 
 if __name__ == "__main__":
-    main() 
+    main()
