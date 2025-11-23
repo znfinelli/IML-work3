@@ -93,8 +93,23 @@ def generate_task_list():
     return tasks
 
 def save_dataframe(data, folder, filename):
-    if not data: return
-    pd.DataFrame(data).to_csv(os.path.join(folder, filename), index=False)
+    # Check if the input is a pandas DataFrame
+    if isinstance(data, pd.DataFrame):
+        if data.empty:
+            return
+        df_to_save = data
+    # Check if the input is an empty list/dictionary (standard Python check)
+    elif not data:
+        return
+    # If it's not a DataFrame and not empty, assume it's a list of records
+    else:
+        df_to_save = pd.DataFrame(data)
+
+    # Ensure the directory exists before attempting to save
+    os.makedirs(folder, exist_ok=True)
+
+    # Save the file
+    df_to_save.to_csv(os.path.join(folder, filename), index=False)
 
 # ---------------------------------------------------------
 # Main Execution Loop
