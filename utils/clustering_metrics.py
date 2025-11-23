@@ -11,7 +11,8 @@ def purity_score(y_true, y_pred) -> float:
     Purity = sum_c max_k n_ck / N.
     """
     cm = confusion_matrix(y_true, y_pred)
-    return np.sum(np.max(cm, axis=1)) / np.sum(cm)
+    # axis=0 looks down columns (per-cluster purity)
+    return np.sum(np.max(cm, axis=0)) / np.sum(cm)
 
 
 def f_measure_score(y_true, y_pred) -> float:

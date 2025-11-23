@@ -52,6 +52,9 @@ class KMeansPP(KMeans):
             
             # 3. Choose next centroid with probability proportional to D(x)^2
             probs = min_dists_sq / np.sum(min_dists_sq)
+
+            # Explicitly re-normalize to prevent "probabilities do not sum to 1" errors
+            probs = probs / np.sum(probs)
             
             # Handle potential numerical issues if sum is 0 (all points on top of centroids)
             if np.sum(min_dists_sq) == 0:
