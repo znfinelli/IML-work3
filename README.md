@@ -15,6 +15,7 @@
 
 
 ## Current Directory Map
+```
 .
 ├── algorithms/                     # Core clustering algorithm implementations
 │   ├── __init__.py                 # Package initialization
@@ -50,3 +51,4 @@
 ├── experiment_runner_session1.py   # Execution script for Session 1 algorithms (Agglomerative/GMM)
 ├── experiment_runner_session2.py   # Execution script for Session 2 algorithms (K-Means/Fuzzy)
 └── results_compiler.py             # Utility to merge distributed/parallel-run result CSVs into a master file
+```
