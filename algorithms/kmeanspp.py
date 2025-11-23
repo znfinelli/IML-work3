@@ -31,7 +31,7 @@ class KMeansPP(KMeans):
         n_samples, n_features = X.shape
         centroids = np.zeros((self.n_clusters, n_features))
         
-        # 1. Choose first centroid uniformly at random
+        # 1. Choose first centroid uniformly and at random
         first_index = np.random.choice(n_samples)
         centroids[0] = X[first_index]
         
