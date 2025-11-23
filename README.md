@@ -10,4 +10,5 @@
 - Modifed `experiment_runner_session1.py` logic to support parallel runs and added run_configs
     - Also modified results saving logic
 - Added `experiment_runner_master.py` for cohesive project submission that combines all experiment runners into a true main script
-- Deleted session 1 & 2 results so no confusion for reruns with one-hot encoder parser; if needed in future, these results are saved in Zoë-work branch
+- Deleted session 1 & 2 results so no confusion for reruns with one-hot encoder parser; if needed in future, these results are saved in `zoë-work branch`
+- Added `results_compiler.py` for handling compiling of results after parallel runs
