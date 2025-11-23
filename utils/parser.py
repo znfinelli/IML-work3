@@ -163,13 +163,17 @@ def preprocess_single_arff(
     else:
         scaler = None
 
-    # 7) One-Hot Encoding for Categorical Features
-    # We use pandas get_dummies to expand categorical columns into binary columns
-    if categorical_cols:
-        df_features = pd.get_dummies(df_features, columns=categorical_cols, prefix=categorical_cols)
-        # Convert boolean True/False to integer 1/0 for K-Means calculation
-        df_features = df_features.astype(int) 
-    
+        # 7) One-Hot Encoding for Categorical Features
+        if categorical_cols:
+            # dtype=int forces the NEW dummy columns to be 0/1 integers
+            # The existing numeric columns (floats) stay as floats
+            df_features = pd.get_dummies(
+                df_features,
+                columns=categorical_cols,
+                prefix=categorical_cols,
+                dtype=int
+            )
+
     # 8) Build X
     X = df_features.values
 
