@@ -75,7 +75,7 @@ def generate_task_list():
         # 4. Fuzzy Clustering Tasks
         if RUN_CONFIG["algorithms"]["Fuzzy_Clustering"]:
             # alpha=1.0 is Standard Bezdek, alpha<1.0 is Suppressed Fan et al.
-            alphas = [1.0, 0.7] 
+            alphas = [1.0, 0.75, 0.5]
             for k in N_CLUSTERS_LIST:
                 for m in FUZZY_M:
                     for alpha in alphas:

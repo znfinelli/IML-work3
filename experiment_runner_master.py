@@ -83,7 +83,7 @@ def generate_task_list():
                             })
 
         if RUN_CONFIG["algorithms"]["Fuzzy_Clustering"]:
-            alphas = [1.0, 0.7]
+            alphas = [1.0, 0.75, 0.5]
             for k in N_CLUSTERS_LIST:
                 for m in FUZZY_M:
                     for alpha in alphas:
