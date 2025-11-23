@@ -7,7 +7,8 @@ provided for the assignment. It includes functions for:
 - Loading a .arff file into a pandas DataFrame.
 - Identifying numeric vs. categorical feature columns.
 - Imputing missing values (median for numeric, mode for categorical).
-- Label-encoding categorical feature columns (and optionally the class).
+- One-Hot Encoding categorical feature columns (for accurate distance metrics).
+- Label-encoding the class column (for validation metrics only).
 - Normalizing numeric features to a [0, 1] range with MinMaxScaler.
 - A main helper to preprocess a SINGLE .arff file for clustering / PCA:
   preprocess_single_arff(...) -> X, y, info
@@ -16,10 +17,8 @@ provided for the assignment. It includes functions for:
 from scipy.io import arff
 import pandas as pd
 import numpy as np
-
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from typing import List, Tuple, Dict, Any, Optional
-
 
 # ---------------------------------------------------------------------
 # Basic helpers
@@ -82,20 +81,31 @@ def handle_missing_values(
 ) -> pd.DataFrame:
     """
     Imputes missing values in the DataFrame:
-      - Numeric columns: median
-      - Categorical columns: mode (most frequent value)
+      - numeric columns: median
+      - categorical columns: mode (most frequent value)
     """
     df = df.copy()
 
+    # 1. Replace '?' (common in UCI datasets) and empty strings with NaN
+    # regex=False ensures we match these characters literally, not as patterns.
+    df.replace('?', np.nan, inplace=True, regex=False)
+    df.replace('', np.nan, inplace=True, regex=False)
+
+    # 2. Handle Numeric Columns
     for col in numeric_cols:
         if df[col].isnull().any():
             median_value = df[col].median()
             df[col] = df[col].fillna(median_value)
 
+    # 3. Handle Categorical Columns
     for col in categorical_cols:
         if df[col].isnull().any():
-            mode_value = df[col].mode()[0]
-            df[col] = df[col].fillna(mode_value)
+            mode_series = df[col].mode()
+            if not mode_series.empty:
+                mode_value = mode_series[0]
+                df[col] = df[col].fillna(mode_value)
+            else:
+                df[col] = df[col].fillna("Missing")
 
     return df
 
@@ -113,41 +123,12 @@ def preprocess_single_arff(
     Preprocesses a SINGLE .arff file for clustering / PCA experiments.
 
     Steps:
-      1. Load full dataset (no folds).
-      2. Identify class column (default: last column).
-      3. Detect numeric and categorical feature columns (excluding class).
-      4. Impute missing values.
-      5. Label-encode categorical feature columns (NOT the class).
-      6. Optionally label-encode the class column and return y.
-      7. Scale numeric feature columns to [0, 1] with MinMaxScaler.
-      8. Build feature matrix X = all features except class.
-
-    Args:
-        filepath:
-            Path to the .arff file (full dataset, no train/test splits).
-        class_column:
-            Name of the class column. If None, the last column of the DataFrame
-            is used.
-        drop_class:
-            If True, the function returns y = None and does not encode the
-            class column. If False, y is returned as encoded integers.
-
-    Returns:
-        X:
-            Numpy array of shape (n_samples, n_features) with preprocessed
-            feature values (numeric + encoded categoricals).
-        y:
-            Numpy array of shape (n_samples,) with encoded class labels,
-            or None if drop_class=True.
-        info:
-            Dictionary containing metadata:
-              - "class_column": name of the class column
-              - "numeric_cols": list of numeric feature column names
-              - "categorical_cols": list of categorical feature column names
-              - "feature_encoders": dict[col_name] -> LabelEncoder for features
-              - "class_encoder": LabelEncoder for the class (or None)
-              - "scaler": MinMaxScaler used for numeric features (or None)
-              - "feature_names": list of columns used as features in X
+      1. Load full dataset.
+      2. Identify class column.
+      3. Impute missing values.
+      4. Scale numeric features (MinMax).
+      5. One-Hot Encode categorical features (pd.get_dummies).
+      6. Label-Encode the class column (for validation metric calculation).
     """
     # 1) Load full dataset
     df = load_arff(filepath)
@@ -159,47 +140,47 @@ def preprocess_single_arff(
     # 3) Identify numeric vs. categorical feature columns
     numeric_cols, categorical_cols = identify_column_types(df, class_column)
 
-    # 4) Handle missing values
+    # 4) Handle missing values (includes replacing '?' with NaN)
     df = handle_missing_values(df, numeric_cols, categorical_cols)
 
-    # 5) Encode categorical feature columns (NOT the class)
-    feature_encoders: Dict[str, LabelEncoder] = {}
-    for col in categorical_cols:
-        if col == class_column:
-            # class is handled separately below
-            continue
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col])
-        feature_encoders[col] = le
-
-    # 6) Optionally encode the class column
-    if drop_class:
-        y = None
-        class_encoder: Optional[LabelEncoder] = None
-    else:
+    # 5) Handle Class Column separately (Label Encode it)
+    # We perform this BEFORE One-Hot encoding the features so the class isn't lost or split
+    y = None
+    class_encoder = None
+    
+    if not drop_class:
         class_encoder = LabelEncoder()
-        df[class_column] = class_encoder.fit_transform(df[class_column])
-        y = df[class_column].values
+        # Force to string to define classes uniquely before encoding
+        y = class_encoder.fit_transform(df[class_column].astype(str))
+    
+    # Drop class from features dataframe so it isn't one-hot encoded
+    df_features = df.drop(columns=[class_column])
 
-    # 7) Normalize numeric feature columns to [0, 1]
+    # 6) Normalize numeric feature columns to [0, 1]
     if numeric_cols:
         scaler = MinMaxScaler(feature_range=(0, 1))
-        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+        df_features[numeric_cols] = scaler.fit_transform(df_features[numeric_cols])
     else:
         scaler = None
 
-    # 8) Build X (all features except the class column)
-    feature_names = [col for col in df.columns if col != class_column]
-    X = df[feature_names].values
+    # 7) One-Hot Encoding for Categorical Features
+    # We use pandas get_dummies to expand categorical columns into binary columns
+    if categorical_cols:
+        df_features = pd.get_dummies(df_features, columns=categorical_cols, prefix=categorical_cols)
+        # Convert boolean True/False to integer 1/0 for K-Means calculation
+        df_features = df_features.astype(int) 
+    
+    # 8) Build X
+    X = df_features.values
 
     info: Dict[str, Any] = {
         "class_column": class_column,
         "numeric_cols": numeric_cols,
         "categorical_cols": categorical_cols,
-        "feature_encoders": feature_encoders,
+        "feature_encoders": "OneHot (pd.get_dummies)", # Updated description
         "class_encoder": class_encoder,
         "scaler": scaler,
-        "feature_names": feature_names,
+        "feature_names": list(df_features.columns),
     }
 
     return X, y, info
