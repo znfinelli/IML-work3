@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 from tqdm import tqdm
 
-# Local Imports
+# Utilities
 from utils.parser import preprocess_single_arff
 from utils.clustering_metrics import compute_clustering_metrics
 

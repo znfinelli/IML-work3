@@ -4,14 +4,16 @@ import datetime
 import pandas as pd
 from tqdm import tqdm
 
-# Imports
+# Utilities
 from utils.parser import preprocess_single_arff
 from utils.clustering_metrics import compute_clustering_metrics
+
+# Algorithms
 from algorithms.agg_clustering import run_agglomerative_once
 from algorithms.gmm_clustering import run_gmm_once
 from algorithms.kmeans import KMeans
 from algorithms.kmeanspp import KMeansPP
-# from kmeans_improved_2 import KMeansImproved2
+# from algorithms.kmeans_mishra import KMeansMishra # (If using Mishra)
 from algorithms.fuzzy_c_means import FuzzyCMeans
 
 # ---------------------------------------------------------

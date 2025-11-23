@@ -4,14 +4,14 @@ import datetime
 import pandas as pd
 from tqdm import tqdm
 
-# Local Imports
+# Utilities
 from utils.parser import preprocess_single_arff
 from utils.clustering_metrics import compute_clustering_metrics
 
 # Session 2 Algorithms
 from algorithms.kmeans import KMeans
 from algorithms.kmeanspp import KMeansPP
-# from kmeans_improved_2 import KMeansImproved2  # <--- Placeholder for Partner Code [cite: 2399-2411]
+# from kmeans_improved_2 import KMeansImproved2  # <--- Placeholder for Emre code
 from algorithms.fuzzy_c_means import FuzzyCMeans
 
 # ---------------------------------------------------------
@@ -54,7 +54,7 @@ def generate_task_list():
             km_algos = [
                 ("KMeans_Standard", KMeans),
                 ("KMeans_PP", KMeansPP),
-                # ("KMeans_Improved_2", KMeansImproved2) # <--- Placeholder
+                # ("KMeans_Improved_2", KMeansImproved2) # <--- Placeholder for Emre code
             ]
             for algo_name, AlgoClass in km_algos:
                 for k in N_CLUSTERS_LIST:

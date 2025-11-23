@@ -1,5 +1,5 @@
 import numpy as np
-from kmeans import KMeans
+from .kmeans import KMeans
 
 class KMeansPP(KMeans):
     """
