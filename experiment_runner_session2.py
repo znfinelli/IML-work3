@@ -1,5 +1,6 @@
 import os
 import time
+import datetime
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -16,12 +17,13 @@ from gmm_clustering import run_gmm_once
 # Session 2 Algorithms
 from kmeans import KMeans
 from kmeanspp import KMeansPP
-# from kmeans_improved_2 import KMeansImproved2  # Placeholder for partner
+# from kmeans_improved_2 import KMeansImproved2
 from fuzzy_c_means import FuzzyCMeans
 
 # ---------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------
+# Tip: Edit this dictionary to run in parallel
 RUN_CONFIG = {
     "datasets": {
         "pen-based": True,
@@ -46,7 +48,7 @@ N_CLUSTERS_LIST = list(range(2, 11))
 METRICS = ["euclidean", "manhattan"]
 FUZZY_M = [1.5, 2.0, 2.5]
 N_RUNS = 10
-PARTIAL_SAVE_INTERVAL = 2  # Save partial results every 2 runs (folds)
+PARTIAL_SAVE_INTERVAL = 2
 
 
 # ---------------------------------------------------------
@@ -58,7 +60,6 @@ def generate_task_list():
     """
     tasks = []
 
-    # We iterate datasets first to group tasks by dataset (efficient loading)
     for ds_name, ds_enabled in RUN_CONFIG["datasets"].items():
         if not ds_enabled: continue
 
@@ -139,8 +140,14 @@ def save_dataframe(data, folder, filename):
 # Main Execution Loop
 # ---------------------------------------------------------
 def main():
-    # Create directory structure
-    base_dir = "results_session2"
+    # Create unique session ID based on time to prevent overwrites
+    session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Identify what is running for the folder name (e.g., "adult_only" or "all")
+    active_datasets = [d for d, enabled in RUN_CONFIG["datasets"].items() if enabled]
+    run_label = "_".join(active_datasets) if len(active_datasets) < 3 else "full_run"
+
+    base_dir = f"results_session2/run_{run_label}_{session_id}"
     dirs = [
         base_dir,
         os.path.join(base_dir, "partial"),
@@ -149,6 +156,9 @@ def main():
     ]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
+
+    print(f"Starting Session: {session_id}")
+    print(f"Results will be saved to: {base_dir}")
 
     print("Generating task list...")
     all_tasks = generate_task_list()
@@ -160,13 +170,11 @@ def main():
         return
 
     global_results = []
-    current_ds_results = []  # Buffer for current dataset results
+    current_ds_results = []
 
-    # Cache for dataset
     current_ds_name = None
     X, y = None, None
 
-    # TQDM Master Bar
     pbar = tqdm(all_tasks, unit="exp")
 
     for i, task in enumerate(pbar):
@@ -175,12 +183,11 @@ def main():
         desc_str = f"{ds_name} | {task.get('algo_name', task['type'])} | k={task['n_clusters']}"
         pbar.set_description(f"{desc_str:<45}")
 
-        # 1. Smart Data Loading & Dataset Switching Logic
+        # Smart Data Loading & Dataset Switching Logic
         if ds_name != current_ds_name:
-            # If we just finished a dataset, save its specific results
             if current_ds_name is not None and current_ds_results:
                 save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
-                current_ds_results = []  # Clear buffer
+                current_ds_results = []
 
             try:
                 X, y, _ = preprocess_single_arff(DATASETS_MAP[ds_name], drop_class=False)
@@ -189,7 +196,7 @@ def main():
                 pbar.write(f"Error loading {ds_name}: {e}")
                 continue
 
-        # 2. Execute Task
+        # Execute Task
         start_time = time.perf_counter()
         res = {}
 
@@ -239,13 +246,13 @@ def main():
                     "labels": labels
                 }
 
-            # 3. Metrics & Storage
+            # Metrics
             res["runtime"] = time.perf_counter() - start_time
 
             if y is not None and "labels" in res:
                 metrics = compute_clustering_metrics(X, y, res["labels"])
                 res.update(metrics)
-                del res["labels"]  # Free memory
+                del res["labels"]
 
             global_results.append(res)
             current_ds_results.append(res)
@@ -253,29 +260,23 @@ def main():
         except Exception as e:
             pbar.write(f"Task failed: {task} Error: {e}")
 
-        # 4. Partial Save (Every 2 runs/folds)
-        # We verify run_id to simulate "every 2 folds" logic regardless of algorithm
+        # Partial Save (Unique filename using timestamp)
         if "run_id" in task and (task["run_id"] + 1) % PARTIAL_SAVE_INTERVAL == 0:
-            save_dataframe(global_results, dirs[1], "latest_partial_results.csv")
+            save_dataframe(global_results, dirs[1], f"partial_results_{session_id}.csv")
 
-    # ---------------------------------------------------------
-    # Final Saving Logic
-    # ---------------------------------------------------------
-
-    # 1. Save Last Dataset Buffer
+    # Final Saves
     if current_ds_results:
         save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
 
     if global_results:
         df_final = pd.DataFrame(global_results)
 
-        # 2. Save Master File
+        # Master File
         df_final.to_csv(os.path.join(dirs[0], "clustering_results_final.csv"), index=False)
 
-        # 3. Save By Algorithm
+        # By Algorithm
         algorithms = df_final['algorithm'].unique()
         for algo in algorithms:
-            # Sanitize filename
             safe_name = algo.replace(" ", "_").replace(".", "-")
             algo_df = df_final[df_final['algorithm'] == algo]
             save_dataframe(algo_df.to_dict('records'), dirs[3], f"{safe_name}.csv")
