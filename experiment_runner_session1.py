@@ -34,9 +34,9 @@ DATASETS_MAP = {
 }
 
 # Global Parameters
-N_CLUSTERS_LIST = list(range(2, 11)) # [cite: 2389]
+N_CLUSTERS_LIST = list(range(2, 11))
 METRICS = ["euclidean", "manhattan"] 
-N_RUNS = 10 # Simulating folds [cite: 2374]
+N_RUNS = 10 # Simulating folds
 PARTIAL_SAVE_INTERVAL = 2 
 
 # ---------------------------------------------------------
@@ -47,7 +47,7 @@ def generate_task_list():
     for ds_name, ds_enabled in RUN_CONFIG["datasets"].items():
         if not ds_enabled: continue
         
-        # 1. Agglomerative Tasks [cite: 2380-2381]
+        # 1. Agglomerative Tasks
         if RUN_CONFIG["algorithms"]["Agglomerative"]:
             for k in N_CLUSTERS_LIST:
                 for link in ["complete", "average", "single"]:
@@ -60,7 +60,7 @@ def generate_task_list():
                             "metric": metric
                         })
 
-        # 2. GMM Tasks [cite: 2382-2384]
+        # 2. GMM Tasks
         if RUN_CONFIG["algorithms"]["GMM"]:
             for k in N_CLUSTERS_LIST:
                 for seed in range(N_RUNS):
