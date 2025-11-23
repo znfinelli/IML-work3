@@ -7,7 +7,8 @@ provided for the assignment. It includes functions for:
 - Loading a .arff file into a pandas DataFrame.
 - Identifying numeric vs. categorical feature columns.
 - Imputing missing values (median for numeric, mode for categorical).
-- Label-encoding categorical feature columns (and optionally the class).
+- One-Hot Encoding categorical feature columns (for accurate distance metrics).
+- Label-encoding the class column (for validation metrics only).
 - Normalizing numeric features to a [0, 1] range with MinMaxScaler.
 - A main helper to preprocess a SINGLE .arff file for clustering / PCA:
   preprocess_single_arff(...) -> X, y, info
@@ -16,10 +17,8 @@ provided for the assignment. It includes functions for:
 from scipy.io import arff
 import pandas as pd
 import numpy as np
-
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from typing import List, Tuple, Dict, Any, Optional
-
 
 # ---------------------------------------------------------------------
 # Basic helpers
@@ -122,6 +121,14 @@ def preprocess_single_arff(
 ) -> Tuple[np.ndarray, Optional[np.ndarray], Dict[str, Any]]:
     """
     Preprocesses a SINGLE .arff file for clustering / PCA experiments.
+
+    Steps:
+      1. Load full dataset.
+      2. Identify class column.
+      3. Impute missing values.
+      4. Scale numeric features (MinMax).
+      5. One-Hot Encode categorical features (pd.get_dummies).
+      6. Label-Encode the class column (for validation metric calculation).
     """
     # 1) Load full dataset
     df = load_arff(filepath)
@@ -136,44 +143,44 @@ def preprocess_single_arff(
     # 4) Handle missing values (includes replacing '?' with NaN)
     df = handle_missing_values(df, numeric_cols, categorical_cols)
 
-    # 5) Encode categorical feature columns (NOT the class)
-    feature_encoders: Dict[str, LabelEncoder] = {}
-    for col in categorical_cols:
-        if col == class_column:
-            continue
-        le = LabelEncoder()
-        # Convert to string to handle mixed types safely
-        df[col] = le.fit_transform(df[col].astype(str))
-        feature_encoders[col] = le
-
-    # 6) Optionally encode the class column
-    if drop_class:
-        y = None
-        class_encoder: Optional[LabelEncoder] = None
-    else:
+    # 5) Handle Class Column separately (Label Encode it)
+    # We perform this BEFORE One-Hot encoding the features so the class isn't lost or split
+    y = None
+    class_encoder = None
+    
+    if not drop_class:
         class_encoder = LabelEncoder()
-        df[class_column] = class_encoder.fit_transform(df[class_column].astype(str))
-        y = df[class_column].values
+        # Force to string to define classes uniquely before encoding
+        y = class_encoder.fit_transform(df[class_column].astype(str))
+    
+    # Drop class from features dataframe so it isn't one-hot encoded
+    df_features = df.drop(columns=[class_column])
 
-    # 7) Normalize numeric feature columns to [0, 1]
+    # 6) Normalize numeric feature columns to [0, 1]
     if numeric_cols:
         scaler = MinMaxScaler(feature_range=(0, 1))
-        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+        df_features[numeric_cols] = scaler.fit_transform(df_features[numeric_cols])
     else:
         scaler = None
 
-    # 8) Build X (all features except the class column)
-    feature_names = [col for col in df.columns if col != class_column]
-    X = df[feature_names].values
+    # 7) One-Hot Encoding for Categorical Features
+    # We use pandas get_dummies to expand categorical columns into binary columns
+    if categorical_cols:
+        df_features = pd.get_dummies(df_features, columns=categorical_cols, prefix=categorical_cols)
+        # Convert boolean True/False to integer 1/0 for K-Means calculation
+        df_features = df_features.astype(int) 
+    
+    # 8) Build X
+    X = df_features.values
 
     info: Dict[str, Any] = {
         "class_column": class_column,
         "numeric_cols": numeric_cols,
         "categorical_cols": categorical_cols,
-        "feature_encoders": feature_encoders,
+        "feature_encoders": "OneHot (pd.get_dummies)", # Updated description
         "class_encoder": class_encoder,
         "scaler": scaler,
-        "feature_names": feature_names,
+        "feature_names": list(df_features.columns),
     }
 
     return X, y, info
