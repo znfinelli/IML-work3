@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class FuzzyCMeans:
     """
     Unified Fuzzy C-Means implementation.
@@ -26,9 +25,9 @@ class FuzzyCMeans:
             n_clusters (c): Number of clusters.
             m: Fuzziness exponent (default 2.0). m > 1.
             alpha: Suppression parameter (0 < alpha <= 1).
-                   - If alpha = 1.0: Runs Standard FCM (Bezdek)[cite: 101].
+                   - If alpha = 1.0: Runs Standard FCM (Bezdek).
                    - If alpha < 1.0: Runs Suppressed FCM (Fan et al.).
-                     (Paper recommends alpha=0.5 for unknown data structures [cite: 106, 188]).
+                     (Paper recommends alpha=0.5 for unknown data structures).
             max_iters: Maximum iterations.
             tol: Tolerance for convergence.
             random_state: Seed for reproducibility.
@@ -52,7 +51,9 @@ class FuzzyCMeans:
         if self.random_state is not None:
             np.random.seed(self.random_state)
 
-        n_samples, n_features = X.shape
+        # --- FIX APPLIED HERE ---
+        # We need the integer number of rows, not the shape tuple
+        n_samples = X.shape[0]
 
         # 1. Initialize U randomly
         # Constraint: sum of memberships for each point must equal 1
@@ -64,7 +65,6 @@ class FuzzyCMeans:
             u_prev = self.u.copy()
 
             # 2. Calculate Centroids (V)
-            # This formula is identical for both Bezdek and Fan et al.
             # V_j = sum(u_ij^m * x_i) / sum(u_ij^m)
             u_pow_m = self.u ** self.m
             denominator = u_pow_m.sum(axis=0).reshape(-1, 1)
@@ -79,7 +79,6 @@ class FuzzyCMeans:
             )
 
             # 3. Calculate Standard Membership (Bezdek Step)
-            # Vectorized implementation for speed
             u_bezdek = self._calculate_bezdek_membership(X)
 
             # 4. Apply Suppression (Fan et al. Step)
@@ -97,19 +96,17 @@ class FuzzyCMeans:
     def _calculate_bezdek_membership(self, X):
         """
         Calculates standard U matrix based on Euclidean distances (Bezdek 1981).
-        Vectorized for performance (replaces slow loops).
+        Vectorized for performance.
         """
         n_samples = X.shape[0]
         exponent = 2.0 / (self.m - 1)
 
         # 1. Calculate Distance Matrix (N x C)
-        # Using broadcasting to compute norms efficiently
         dist_matrix = np.zeros((n_samples, self.n_clusters))
         for k in range(self.n_clusters):
             dist_matrix[:, k] = np.linalg.norm(X - self.centroids[k], axis=1)
 
-        # 2. Avoid division by zero (handling singularities)
-        # Replace zeros with a tiny number temporarily to allow division
+        # 2. Avoid division by zero
         dist_matrix_safe = np.fmax(dist_matrix, 1e-10)
 
         # 3. Calculate terms: (1 / d_ik) ^ (2 / m-1)
@@ -121,8 +118,7 @@ class FuzzyCMeans:
         # 4. Compute Membership
         u_new = inv_dist_pow / sum_inv_dist_pow
 
-        # 5. Fix Singularities (Points exactly on a centroid)
-        # If a point had distance 0, it should have membership 1.0 to that cluster
+        # 5. Fix Singularities
         zero_indices = np.where(dist_matrix == 0)
         if len(zero_indices[0]) > 0:
             u_new[zero_indices[0], :] = 0
@@ -132,28 +128,20 @@ class FuzzyCMeans:
 
     def _suppress_membership(self, u_old):
         """
-        Applies suppression logic from Fan et al. (2003) .
+        Applies suppression logic from Fan et al. (2003).
         Vectorized for performance.
-
-        Logic:
-        - Winner: u_new = 1 - alpha + alpha * u_old
-        - Losers: u_new = alpha * u_old
         """
         if self.alpha >= 1.0:
             return u_old
 
         # 1. Suppress everyone by alpha first
-        # This satisfies the formula for the "losers" (u_new = alpha * u_old)
         u_new = u_old * self.alpha
 
         # 2. Adjust the winner's membership
-        # Identify indices of the max membership for each row
         rows = np.arange(u_old.shape[0])
         winners = np.argmax(u_old, axis=1)
 
         # Apply the winner formula: 1 - alpha + alpha * u_old
-        # Currently u_new[winner] holds (alpha * u_old)
-        # So we just need to add (1 - alpha)
         u_new[rows, winners] = 1.0 - self.alpha + u_new[rows, winners]
 
         return u_new
@@ -169,8 +157,8 @@ class FuzzyCMeans:
 if __name__ == "__main__":
     from sklearn.datasets import make_blobs
 
-    # Generate sample data (Renamed to X_test to avoid shadowing warnings)
-    X_test, y_true = make_blobs(n_samples=300, centers=3, n_features=2, random_state=42)
+    # Generate sample data
+    X_test, _ = make_blobs(n_samples=300, centers=3, n_features=2, random_state=42)
 
     print("--- Test 1: Standard FCM (Bezdek) alpha=1.0 ---")
     fcm_std = FuzzyCMeans(n_clusters=3, m=2.0, alpha=1.0, random_state=42)
@@ -182,7 +170,7 @@ if __name__ == "__main__":
     fcm_sup.fit(X_test)
     print(f"Converged in {fcm_sup.n_iter_} iterations.")
 
-    # Recommended alpha=0.5 from Fan et al. paper [cite: 188]
+    # Recommended alpha=0.5 from Fan et al. paper
     print("\n--- Test 3: Heavy Suppression (Fan et al.) alpha=0.5 ---")
     fcm_heavy = FuzzyCMeans(n_clusters=3, m=2.0, alpha=0.5, random_state=42)
     fcm_heavy.fit(X_test)
