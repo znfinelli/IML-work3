@@ -1,20 +1,18 @@
 import os
 import time
 import datetime
-import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import List, Dict, Any
 
 # Local Imports
-from parser import preprocess_single_arff
-from clustering_metrics import compute_clustering_metrics
+from utils.parser import preprocess_single_arff
+from utils.clustering_metrics import compute_clustering_metrics
 
 # Session 2 Algorithms
-from kmeans import KMeans
-from kmeanspp import KMeansPP
+from algorithms.kmeans import KMeans
+from algorithms.kmeanspp import KMeansPP
 # from kmeans_improved_2 import KMeansImproved2  # <--- Placeholder for Partner Code [cite: 2399-2411]
-from fuzzy_c_means import FuzzyCMeans
+from algorithms.fuzzy_c_means import FuzzyCMeans
 
 # ---------------------------------------------------------
 # CONFIGURATION

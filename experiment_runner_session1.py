@@ -1,18 +1,16 @@
 import os
 import time
 import datetime
-import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import List, Dict, Any
 
 # Local Imports
-from parser import preprocess_single_arff
-from clustering_metrics import compute_clustering_metrics
+from utils.parser import preprocess_single_arff
+from utils.clustering_metrics import compute_clustering_metrics
 
 # Session 1 Algorithms
-from agg_clustering import run_agglomerative_once
-from gmm_clustering import run_gmm_once
+from algorithms.agg_clustering import run_agglomerative_once
+from algorithms.gmm_clustering import run_gmm_once
 
 # ---------------------------------------------------------
 # CONFIGURATION
