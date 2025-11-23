@@ -163,16 +163,16 @@ def preprocess_single_arff(
     else:
         scaler = None
 
-        # 7) One-Hot Encoding for Categorical Features
-        if categorical_cols:
-            # dtype=int forces the NEW dummy columns to be 0/1 integers
-            # The existing numeric columns (floats) stay as floats
-            df_features = pd.get_dummies(
-                df_features,
-                columns=categorical_cols,
-                prefix=categorical_cols,
-                dtype=int
-            )
+    # 7) One-Hot Encoding for Categorical Features
+    if categorical_cols:
+        # dtype=int forces the NEW dummy columns to be 0/1 integers
+        # The existing numeric columns (floats) stay as floats
+        df_features = pd.get_dummies(
+            df_features,
+            columns=categorical_cols,
+            prefix=categorical_cols,
+            dtype=int
+        )
 
     # 8) Build X
     X = df_features.values
