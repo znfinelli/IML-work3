@@ -16,7 +16,7 @@ from gmm_clustering import run_gmm_once
 # Session 2 Algorithms (Your Code)
 from kmeans import KMeans
 from kmeanspp import KMeansPP
-# from kmeans_improved_2 import KMeansImproved2  # <--- UNCOMMENT THIS WHEN PARTNER IS READY
+# from kmeans_improved_2 import KMeansImproved2  # <--- UNCOMMENT THIS WHEN EMRE IS READY
 from fuzzy_c_means import FuzzyCMeans
 
 def save_partial_results(results, filename):
@@ -25,7 +25,6 @@ def save_partial_results(results, filename):
         return
     df = pd.DataFrame(results)
     df.to_csv(filename, index=False)
-    # No print here to avoid cluttering the progress bar output
 
 def main():
     # ---------------------------------------------------------
@@ -130,7 +129,7 @@ def main():
             algorithms = [
                 ("KMeans_Standard", KMeans),
                 ("KMeans_PP",       KMeansPP),
-                # ("KMeans_Improved_2", KMeansImproved2), 
+                # ("KMeans_Improved_2", KMeansImproved2), <--- UNCOMMENT THIS WHEN EMRE IS READY
             ]
 
             for name, AlgoClass in algorithms:
