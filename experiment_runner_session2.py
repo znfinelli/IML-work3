@@ -36,8 +36,8 @@ DATASETS_MAP = {
 }
 
 N_CLUSTERS_LIST = list(range(2, 11))
-METRICS = ["euclidean", "manhattan"] # 
-FUZZY_M = [1.5, 2.0, 2.5] # [cite: 2426]
+METRICS = ["euclidean", "manhattan"]
+FUZZY_M = [1.5, 2.0, 2.5]
 N_RUNS = 10
 PARTIAL_SAVE_INTERVAL = 2
 
@@ -49,7 +49,7 @@ def generate_task_list():
     for ds_name, ds_enabled in RUN_CONFIG["datasets"].items():
         if not ds_enabled: continue
         
-        # 3. K-Means Variants Tasks [cite: 2385-2411]
+        # 3. K-Means Variants Tasks
         if RUN_CONFIG["algorithms"]["KMeans_Variants"]:
             km_algos = [
                 ("KMeans_Standard", KMeans),
@@ -72,7 +72,7 @@ def generate_task_list():
                                 "run_id": seed
                             })
 
-        # 4. Fuzzy Clustering Tasks [cite: 2412-2427]
+        # 4. Fuzzy Clustering Tasks
         if RUN_CONFIG["algorithms"]["Fuzzy_Clustering"]:
             # alpha=1.0 is Standard Bezdek, alpha<1.0 is Suppressed Fan et al.
             alphas = [1.0, 0.7] 
