@@ -2,223 +2,290 @@ import os
 import time
 import numpy as np
 import pandas as pd
-from tqdm import tqdm  # Progress bar library
-from typing import List, Dict, Optional
+from tqdm import tqdm
+from typing import List, Dict, Any
 
-# Import your local implementations
+# Import local implementations
 from parser import preprocess_single_arff
 from clustering_metrics import compute_clustering_metrics
 
-# Session 1 Algorithms (sklearn)
+# Session 1 Algorithms
 from agg_clustering import run_agglomerative_once
 from gmm_clustering import run_gmm_once
 
-# Session 2 Algorithms (Your Code)
+# Session 2 Algorithms
 from kmeans import KMeans
 from kmeanspp import KMeansPP
-# from kmeans_improved_2 import KMeansImproved2  # <--- UNCOMMENT THIS WHEN EMRE IS READY
+# from kmeans_improved_2 import KMeansImproved2  # Placeholder for partner
 from fuzzy_c_means import FuzzyCMeans
 
-def save_partial_results(results, filename):
-    """Helper to save results during execution"""
-    if not results:
-        return
-    df = pd.DataFrame(results)
-    df.to_csv(filename, index=False)
-
-def main():
-    # ---------------------------------------------------------
-    # 1. CONFIGURATION
-    # ---------------------------------------------------------
-    
-    RUN_CONFIG = {
-        "datasets": {
-            "pen-based": True,
-            "adult": True,
-            "mushroom": True
-        },
-        "algorithms": {
-            "Agglomerative": True,
-            "GMM": True,
-            "KMeans_Variants": True,
-            "Fuzzy_Clustering": True
-        }
+# ---------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------
+RUN_CONFIG = {
+    "datasets": {
+        "pen-based": True,
+        "adult": True,
+        "mushroom": True
+    },
+    "algorithms": {
+        "Agglomerative": True,
+        "GMM": True,
+        "KMeans_Variants": True,
+        "Fuzzy_Clustering": True
     }
+}
 
-    DATASETS = [
-        {"name": "pen-based", "path": "datasets/pen-based.arff"},
-        {"name": "adult",     "path": "datasets/adult.arff"},
-        {"name": "mushroom",  "path": "datasets/mushroom.arff"},
-    ]
+DATASETS_MAP = {
+    "pen-based": "datasets/pen-based.arff",
+    "adult": "datasets/adult.arff",
+    "mushroom": "datasets/mushroom.arff",
+}
 
-    N_CLUSTERS_LIST = [2, 3, 4, 5]
-    METRICS = ["euclidean", "manhattan"]
-    FUZZY_M = [1.5, 2.0, 2.5]
-    
-    N_RUNS = 10 
-    SAVE_INTERVAL = 2 # Save every 2 folds
+N_CLUSTERS_LIST = [2, 3, 4, 5]
+METRICS = ["euclidean", "manhattan"]
+FUZZY_M = [1.5, 2.0, 2.5]
+N_RUNS = 10
+PARTIAL_SAVE_INTERVAL = 2  # Save partial results every 2 runs (folds)
 
-    os.makedirs("results_session2", exist_ok=True)
-    global_results = []
-    partial_file = "results_session2/clustering_results_partial.csv"
 
-    for ds_cfg in DATASETS:
-        ds_name = ds_cfg["name"]
-        
-        if not RUN_CONFIG["datasets"].get(ds_name, False):
-            continue
-            
-        print(f"\n{'='*60}")
-        print(f"PROCESSING DATASET: {ds_name}")
-        print(f"{'='*60}")
-        
-        # Load Data
-        try:
-            X, y, _ = preprocess_single_arff(ds_cfg["path"], drop_class=False)
-            print(f"Data loaded: {X.shape} samples, {X.shape[1]} features")
-        except FileNotFoundError:
-            print(f"ERROR: File not found at {ds_cfg['path']}. Skipping.")
-            continue
+# ---------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------
+def generate_task_list():
+    """
+    Generates a flat list of all experiments to be executed.
+    """
+    tasks = []
 
-        # -----------------------------------------------------
-        # 2. RUN AGGLOMERATIVE
-        # -----------------------------------------------------
+    # We iterate datasets first to group tasks by dataset (efficient loading)
+    for ds_name, ds_enabled in RUN_CONFIG["datasets"].items():
+        if not ds_enabled: continue
+
+        # 1. Agglomerative Tasks
         if RUN_CONFIG["algorithms"]["Agglomerative"]:
-            print("\n--- Algorithm: Agglomerative Clustering ---")
-            combinations = [(k, link) for k in N_CLUSTERS_LIST for link in ["complete", "average", "single"]]
-            
-            # Deterministic = No folds, just iterating configs
-            for k, linkage in tqdm(combinations, desc=f"Agglomerative ({ds_name})"):
-                res = run_agglomerative_once(X, k, "euclidean", linkage, ds_name)
-                if y is not None:
-                    res.update(compute_clustering_metrics(X, y, res['labels']))
-                del res['labels'] 
-                global_results.append(res)
-            
-            save_partial_results(global_results, partial_file)
-
-        # -----------------------------------------------------
-        # 3. RUN GMM
-        # -----------------------------------------------------
-        if RUN_CONFIG["algorithms"]["GMM"]:
-            print("\n--- Algorithm: Gaussian Mixture Models ---")
-            
-            # Loop over K values
             for k in N_CLUSTERS_LIST:
-                # Progress bar for the Folds (Runs)
-                pbar = tqdm(range(N_RUNS), desc=f"GMM (k={k})")
-                
-                for seed in pbar:
-                    res = run_gmm_once(X, k, "kmeans", ds_name) 
-                    if y is not None:
-                        res.update(compute_clustering_metrics(X, y, res['labels']))
-                    del res['labels']
-                    res['run_id'] = seed
-                    global_results.append(res)
-                    
-                    # Partial Save
-                    if (seed + 1) % SAVE_INTERVAL == 0:
-                        save_partial_results(global_results, partial_file)
+                for link in ["complete", "average", "single"]:
+                    tasks.append({
+                        "type": "agg",
+                        "dataset": ds_name,
+                        "n_clusters": k,
+                        "linkage": link,
+                        "metric": "euclidean"
+                    })
 
-        # -----------------------------------------------------
-        # 4. RUN YOUR K-MEANS VARIANTS
-        # -----------------------------------------------------
+        # 2. GMM Tasks
+        if RUN_CONFIG["algorithms"]["GMM"]:
+            for k in N_CLUSTERS_LIST:
+                for seed in range(N_RUNS):
+                    tasks.append({
+                        "type": "gmm",
+                        "dataset": ds_name,
+                        "n_clusters": k,
+                        "run_id": seed
+                    })
+
+        # 3. K-Means Variants Tasks
         if RUN_CONFIG["algorithms"]["KMeans_Variants"]:
-            print("\n--- Algorithm: K-Means Variants ---")
-            
-            algorithms = [
+            km_algos = [
                 ("KMeans_Standard", KMeans),
-                ("KMeans_PP",       KMeansPP),
-                # ("KMeans_Improved_2", KMeansImproved2), <--- UNCOMMENT THIS WHEN EMRE IS READY
+                ("KMeans_PP", KMeansPP),
+                # ("KMeans_Improved_2", KMeansImproved2)
             ]
-
-            for name, AlgoClass in algorithms:
+            for algo_name, AlgoClass in km_algos:
                 for k in N_CLUSTERS_LIST:
                     for metric in METRICS:
-                        current_runs = N_RUNS 
-                        
-                        # Progress bar for Folds
-                        desc = f"{name} (k={k}, {metric})"
-                        pbar = tqdm(range(current_runs), desc=desc)
-                        
-                        for seed in pbar:
-                            start = time.perf_counter()
-                            
-                            model = AlgoClass(n_clusters=k, metric=metric, random_state=seed)
-                            labels = model.fit_predict(X)
-                            
-                            runtime = time.perf_counter() - start
-                            metrics = compute_clustering_metrics(X, y, labels) if y is not None else {}
-                            
-                            entry = {
+                        current_runs = N_RUNS
+                        for seed in range(current_runs):
+                            tasks.append({
+                                "type": "kmeans",
+                                "class": AlgoClass,
+                                "algo_name": algo_name,
                                 "dataset": ds_name,
-                                "algorithm": name,
                                 "n_clusters": k,
                                 "metric": metric,
-                                "run_id": seed,
-                                "runtime": runtime,
-                                "inertia": getattr(model, 'inertia_', 0)
-                            }
-                            entry.update(metrics)
-                            global_results.append(entry)
-                            
-                            if (seed + 1) % SAVE_INTERVAL == 0:
-                                save_partial_results(global_results, partial_file)
+                                "run_id": seed
+                            })
 
-        # -----------------------------------------------------
-        # 5. RUN FUZZY CLUSTERING
-        # -----------------------------------------------------
+        # 4. Fuzzy Clustering Tasks
         if RUN_CONFIG["algorithms"]["Fuzzy_Clustering"]:
-            print("\n--- Algorithm: Fuzzy C-Means ---")
-            alphas = [1.0, 0.7] 
-            
-            # We flatten the loop slightly to make the progress bar more meaningful
-            # Instead of nested loops for m/alpha inside K, we iterate combinations
-            
+            alphas = [1.0, 0.7]
             for k in N_CLUSTERS_LIST:
                 for m in FUZZY_M:
                     for alpha in alphas:
                         algo_name = "FCM_Standard" if alpha == 1.0 else f"FCM_Suppressed_{alpha}"
-                        desc = f"{algo_name} (k={k}, m={m})"
-                        
-                        pbar = tqdm(range(N_RUNS), desc=desc)
-                        
-                        for seed in pbar:
-                            start = time.perf_counter()
-                            
-                            fcm = FuzzyCMeans(n_clusters=k, m=m, alpha=alpha, random_state=seed)
-                            labels = fcm.fit_predict(X)
-                            
-                            runtime = time.perf_counter() - start
-                            metrics = compute_clustering_metrics(X, y, labels) if y is not None else {}
-                            
-                            entry = {
+                        for seed in range(N_RUNS):
+                            tasks.append({
+                                "type": "fuzzy",
                                 "dataset": ds_name,
-                                "algorithm": algo_name,
+                                "algo_name": algo_name,
                                 "n_clusters": k,
-                                "metric": "euclidean",
-                                "param_m": m,
-                                "param_alpha": alpha,
-                                "run_id": seed,
-                                "runtime": runtime
-                            }
-                            entry.update(metrics)
-                            global_results.append(entry)
-                            
-                            if (seed + 1) % SAVE_INTERVAL == 0:
-                                save_partial_results(global_results, partial_file)
+                                "m": m,
+                                "alpha": alpha,
+                                "run_id": seed
+                            })
+    return tasks
+
+
+def save_dataframe(data, folder, filename):
+    """Helper to save list of dicts to CSV."""
+    if not data:
+        return
+    filepath = os.path.join(folder, filename)
+    pd.DataFrame(data).to_csv(filepath, index=False)
+
+
+# ---------------------------------------------------------
+# Main Execution Loop
+# ---------------------------------------------------------
+def main():
+    # Create directory structure
+    base_dir = "results_session2"
+    dirs = [
+        base_dir,
+        os.path.join(base_dir, "partial"),
+        os.path.join(base_dir, "by_dataset"),
+        os.path.join(base_dir, "by_algorithm")
+    ]
+    for d in dirs:
+        os.makedirs(d, exist_ok=True)
+
+    print("Generating task list...")
+    all_tasks = generate_task_list()
+    total_tasks = len(all_tasks)
+    print(f"Total experiments to run: {total_tasks}")
+
+    if total_tasks == 0:
+        print("No tasks selected in RUN_CONFIG. Exiting.")
+        return
+
+    global_results = []
+    current_ds_results = []  # Buffer for current dataset results
+
+    # Cache for dataset
+    current_ds_name = None
+    X, y = None, None
+
+    # TQDM Master Bar
+    pbar = tqdm(all_tasks, unit="exp")
+
+    for i, task in enumerate(pbar):
+        ds_name = task["dataset"]
+
+        desc_str = f"{ds_name} | {task.get('algo_name', task['type'])} | k={task['n_clusters']}"
+        pbar.set_description(f"{desc_str:<45}")
+
+        # 1. Smart Data Loading & Dataset Switching Logic
+        if ds_name != current_ds_name:
+            # If we just finished a dataset, save its specific results
+            if current_ds_name is not None and current_ds_results:
+                save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
+                current_ds_results = []  # Clear buffer
+
+            try:
+                X, y, _ = preprocess_single_arff(DATASETS_MAP[ds_name], drop_class=False)
+                current_ds_name = ds_name
+            except Exception as e:
+                pbar.write(f"Error loading {ds_name}: {e}")
+                continue
+
+        # 2. Execute Task
+        start_time = time.perf_counter()
+        res = {}
+
+        try:
+            if task["type"] == "agg":
+                res = run_agglomerative_once(
+                    X, task["n_clusters"], "euclidean", task["linkage"], ds_name
+                )
+
+            elif task["type"] == "gmm":
+                res = run_gmm_once(X, task["n_clusters"], "kmeans", ds_name)
+                res["run_id"] = task["run_id"]
+
+            elif task["type"] == "kmeans":
+                model = task["class"](
+                    n_clusters=task["n_clusters"],
+                    metric=task["metric"],
+                    random_state=task["run_id"]
+                )
+                labels = model.fit_predict(X)
+                res = {
+                    "dataset": ds_name,
+                    "algorithm": task["algo_name"],
+                    "n_clusters": task["n_clusters"],
+                    "metric": task["metric"],
+                    "run_id": task["run_id"],
+                    "inertia": getattr(model, 'inertia_', 0),
+                    "labels": labels
+                }
+
+            elif task["type"] == "fuzzy":
+                fcm = FuzzyCMeans(
+                    n_clusters=task["n_clusters"],
+                    m=task["m"],
+                    alpha=task["alpha"],
+                    random_state=task["run_id"]
+                )
+                labels = fcm.fit_predict(X)
+                res = {
+                    "dataset": ds_name,
+                    "algorithm": task["algo_name"],
+                    "n_clusters": task["n_clusters"],
+                    "metric": "euclidean",
+                    "param_m": task["m"],
+                    "param_alpha": task["alpha"],
+                    "run_id": task["run_id"],
+                    "labels": labels
+                }
+
+            # 3. Metrics & Storage
+            res["runtime"] = time.perf_counter() - start_time
+
+            if y is not None and "labels" in res:
+                metrics = compute_clustering_metrics(X, y, res["labels"])
+                res.update(metrics)
+                del res["labels"]  # Free memory
+
+            global_results.append(res)
+            current_ds_results.append(res)
+
+        except Exception as e:
+            pbar.write(f"Task failed: {task} Error: {e}")
+
+        # 4. Partial Save (Every 2 runs/folds)
+        # We verify run_id to simulate "every 2 folds" logic regardless of algorithm
+        if "run_id" in task and (task["run_id"] + 1) % PARTIAL_SAVE_INTERVAL == 0:
+            save_dataframe(global_results, dirs[1], "latest_partial_results.csv")
 
     # ---------------------------------------------------------
-    # 6. FINAL SAVE
+    # Final Saving Logic
     # ---------------------------------------------------------
+
+    # 1. Save Last Dataset Buffer
+    if current_ds_results:
+        save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
+
     if global_results:
-        df = pd.DataFrame(global_results)
-        final_file = "results_session2/clustering_results_final.csv"
-        df.to_csv(final_file, index=False)
-        print(f"\n SUCCESS! Final results saved to {final_file}")
-        print(f"   Total Experiments Completed: {len(df)}")
+        df_final = pd.DataFrame(global_results)
+
+        # 2. Save Master File
+        df_final.to_csv(os.path.join(dirs[0], "clustering_results_final.csv"), index=False)
+
+        # 3. Save By Algorithm
+        algorithms = df_final['algorithm'].unique()
+        for algo in algorithms:
+            # Sanitize filename
+            safe_name = algo.replace(" ", "_").replace(".", "-")
+            algo_df = df_final[df_final['algorithm'] == algo]
+            save_dataframe(algo_df.to_dict('records'), dirs[3], f"{safe_name}.csv")
+
+        print(f"\nExperiment execution complete.")
+        print(f"Total experiments: {len(df_final)}")
+        print(f"Results saved to: {base_dir}")
     else:
-        print("\n No results generated. Check your configuration.")
+        print("\nNo results generated. Please check configuration.")
+
 
 if __name__ == "__main__":
     main()
