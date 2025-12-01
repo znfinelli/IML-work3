@@ -11,7 +11,7 @@ from utils.clustering_metrics import compute_clustering_metrics
 # Session 2 Algorithms
 from algorithms.kmeans import KMeans
 from algorithms.kmeanspp import KMeansPP
-# from kmeans_improved_2 import KMeansImproved2  # <--- Placeholder for Emre code
+from algorithms.kmeansfekm import KMeansFEKM
 from algorithms.fuzzy_c_means import FuzzyCMeans
 
 # ---------------------------------------------------------
@@ -54,13 +54,16 @@ def generate_task_list():
             km_algos = [
                 ("KMeans_Standard", KMeans),
                 ("KMeans_PP", KMeansPP),
-                # ("KMeans_Improved_2", KMeansImproved2) # <--- Placeholder for Emre code
+                ("KMeans_FEKM", KMeansFEKM)
             ]
             for algo_name, AlgoClass in km_algos:
                 for k in N_CLUSTERS_LIST:
                     for metric in METRICS:
                         # Adjust 'current_runs' to 1 if algorithm is deterministic
-                        current_runs = N_RUNS 
+                        if algo_name == "KMeans_FEKM":
+                            current_runs = 1
+                        else:
+                            current_runs = N_RUNS
                         for seed in range(current_runs):
                             tasks.append({
                                 "type": "kmeans",

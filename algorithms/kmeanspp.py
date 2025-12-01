@@ -1,5 +1,10 @@
 import numpy as np
-from .kmeans import KMeans
+
+# Handle both relative and absolute imports
+try:
+    from .kmeans import KMeans
+except ImportError:
+    from kmeans import KMeans
 
 class KMeansPP(KMeans):
     """

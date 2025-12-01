@@ -13,7 +13,7 @@ from algorithms.agg_clustering import run_agglomerative_once
 from algorithms.gmm_clustering import run_gmm_once
 from algorithms.kmeans import KMeans
 from algorithms.kmeanspp import KMeansPP
-# from algorithms.kmeans_mishra import KMeansMishra # (If using Mishra)
+from algorithms.kmeansfekm import KMeansFEKM
 from algorithms.fuzzy_c_means import FuzzyCMeans
 
 # ---------------------------------------------------------
@@ -71,15 +71,29 @@ def generate_task_list():
                     })
 
         if RUN_CONFIG["algorithms"]["KMeans_Variants"]:
-            km_algos = [("KMeans_Standard", KMeans), ("KMeans_PP", KMeansPP)]
-            # Add partner code here later
+            km_algos = [
+                ("KMeans_Standard", KMeans),
+                ("KMeans_PP", KMeansPP),
+                ("KMeans_FEKM", KMeansFEKM)
+            ]
+
             for algo_name, AlgoClass in km_algos:
                 for k in N_CLUSTERS_LIST:
                     for metric in METRICS:
+                        # Adjust 'current_runs' to 1 if algorithm is deterministic
+                        if algo_name == "KMeans_FEKM":
+                            current_runs = 1
+                        else:
+                            current_runs = N_RUNS
                         for seed in range(N_RUNS):
                             tasks.append({
-                                "type": "kmeans", "class": AlgoClass, "algo_name": algo_name,
-                                "dataset": ds_name, "n_clusters": k, "metric": metric, "run_id": seed
+                                "type": "kmeans",
+                                "class": AlgoClass,
+                                "algo_name": algo_name,
+                                "dataset": ds_name,
+                                "n_clusters": k,
+                                "metric": metric,
+                                "run_id": seed
                             })
 
         if RUN_CONFIG["algorithms"]["Fuzzy_Clustering"]:
