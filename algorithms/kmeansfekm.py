@@ -24,6 +24,8 @@ class KMeansFEKM(KMeans):
         """
         Initialize centroids using the exact FEKM strategy from the paper.
         """
+        X = X.astype(np.float32)
+
         n_samples, n_features = X.shape
         centroids = np.zeros((self.n_clusters, n_features))
 
