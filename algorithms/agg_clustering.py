@@ -13,6 +13,8 @@ def run_agglomerative_once(
     Runs AgglomerativeClustering once with given configuration.
     Returns a dict with config + runtime (labels kept in-memory).
     """
+    X = X.astype(np.float32)
+
     start = time.perf_counter()
     model = AgglomerativeClustering(
         n_clusters=n_clusters,

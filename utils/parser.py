@@ -86,9 +86,10 @@ def handle_missing_values(
     """
     df = df.copy()
 
-    # 1. Replace '?' (common in UCI datasets) and empty strings with NaN
-    # regex=False ensures we match these characters literally, not as patterns.
+    # 1. Replace common missing markers with NaN
+    # Add '.' here to handle it in categorical columns too
     df.replace('?', np.nan, inplace=True, regex=False)
+    df.replace('.', np.nan, inplace=True, regex=False)  # <--- ADD THIS LINE
     df.replace('', np.nan, inplace=True, regex=False)
 
     # 2. Handle Numeric Columns
@@ -115,20 +116,13 @@ def handle_missing_values(
 # ---------------------------------------------------------------------
 
 def preprocess_single_arff(
-    filepath: str,
-    class_column: Optional[str] = None,
-    drop_class: bool = False,
+        filepath: str,
+        class_column: Optional[str] = None,
+        drop_class: bool = False,
 ) -> Tuple[np.ndarray, Optional[np.ndarray], Dict[str, Any]]:
     """
     Preprocesses a SINGLE .arff file for clustering / PCA experiments.
-
-    Steps:
-      1. Load full dataset.
-      2. Identify class column.
-      3. Impute missing values.
-      4. Scale numeric features (MinMax).
-      5. One-Hot Encode categorical features (pd.get_dummies).
-      6. Label-Encode the class column (for validation metric calculation).
+    Includes robust handling for 'dirty' numeric columns.
     """
     # 1) Load full dataset
     df = load_arff(filepath)
@@ -137,36 +131,45 @@ def preprocess_single_arff(
     if class_column is None:
         class_column = get_class_column_name(df)
 
+    # Attempt to convert ALL feature columns to numeric first.
+    # If a column is mostly numbers but has '?' or '.', this fixes it.
+    for col in df.columns:
+        if col == class_column:
+            continue
+
+        # Try to force conversion. 'coerce' turns '?', '.', 'string' into NaN
+        # We only keep the conversion if it doesn't turn the WHOLE column to NaN
+        # (which would happen if the column is actually categorical like 'Sex')
+        converted = pd.to_numeric(df[col], errors='coerce')
+
+        # Heuristic: If > 50% of the column is valid numbers, treat it as numeric
+        if converted.notna().mean() > 0.5:
+            df[col] = converted
+
     # 3) Identify numeric vs. categorical feature columns
     numeric_cols, categorical_cols = identify_column_types(df, class_column)
 
-    # 4) Handle missing values (includes replacing '?' with NaN)
+    # 4) Handle missing values (NaNs introduced by to_numeric are handled here)
     df = handle_missing_values(df, numeric_cols, categorical_cols)
 
-    # 5) Handle Class Column separately (Label Encode it)
-    # We perform this BEFORE One-Hot encoding the features so the class isn't lost or split
+    # 5) Handle Class Column
     y = None
     class_encoder = None
-    
     if not drop_class:
         class_encoder = LabelEncoder()
-        # Force to string to define classes uniquely before encoding
         y = class_encoder.fit_transform(df[class_column].astype(str))
-    
-    # Drop class from features dataframe so it isn't one-hot encoded
+
     df_features = df.drop(columns=[class_column])
 
-    # 6) Normalize numeric feature columns to [0, 1]
+    # 6) Normalize numeric
     if numeric_cols:
         scaler = MinMaxScaler(feature_range=(0, 1))
         df_features[numeric_cols] = scaler.fit_transform(df_features[numeric_cols])
     else:
         scaler = None
 
-    # 7) One-Hot Encoding for Categorical Features
+    # 7) One-Hot Encoding
     if categorical_cols:
-        # dtype=int forces the NEW dummy columns to be 0/1 integers
-        # The existing numeric columns (floats) stay as floats
         df_features = pd.get_dummies(
             df_features,
             columns=categorical_cols,
@@ -181,7 +184,7 @@ def preprocess_single_arff(
         "class_column": class_column,
         "numeric_cols": numeric_cols,
         "categorical_cols": categorical_cols,
-        "feature_encoders": "OneHot (pd.get_dummies)", # Updated description
+        "feature_encoders": "OneHot (pd.get_dummies)",
         "class_encoder": class_encoder,
         "scaler": scaler,
         "feature_names": list(df_features.columns),
