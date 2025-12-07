@@ -7,11 +7,11 @@ from typing import List, Dict
 # Configuration
 # ---------------------------------------------------------
 COMPILATION_CONFIG = {
-    # Directories to scan (add 'results_master' if you use that too)
+    # Directories to scan
     "input_directories": [
         "results_session1",
         "results_session2",
-        "results_master"
+        "results_session3",
     ],
 
     # PATTERN MATCHING UPDATE:
@@ -20,7 +20,7 @@ COMPILATION_CONFIG = {
     "target_pattern": "*_final_results.csv",
 
     # The output path for the combined file
-    "output_filename": "compiled_results_master.csv"
+    "output_filename": "session3_final_results_compiled.csv"
 }
 
 
