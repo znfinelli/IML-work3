@@ -1,4 +1,4 @@
-# Clustering & Dimensionality Reduction Project (Work 3)
+# Clustering & Dimensionality Reduction Project
 **Authors:** Zoë Finelli, Onat Bitirgen, Noel Torres Carretero, Emre Karaoglu
 
 ## Overview
