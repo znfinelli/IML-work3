@@ -1,56 +1,186 @@
-## Current Directory Map
+# Clustering & Dimensionality Reduction Project (Work 3)
+**Authors:** Zoë Finelli, Onat Bitirgen, Noel Torres Carretero, Emre Karaoglu
+
+## Overview
+This project implements a comprehensive, modular framework for the analysis of high-dimensional datasets (Adult, Mushroom, Pen-based) using unsupervised learning techniques. It covers the full spectrum of clustering analysis, ranging from **standard baseline algorithms** (K-Means, Agglomerative, GMM) to **custom, built-from-scratch implementations** of advanced methods (Far Efficient K-Means, Intelligent Kernel K-Means, Suppressed Fuzzy C-Means).
+
+### Execution Architecture
+The project is architected to support two distinct execution paradigms to handle the computational demands of large-scale grid searches:
+
+1.  **Master Execution (Sequential):**
+    The `main.py` script acts as a master controller. It executes Session 1, Session 2, and Session 3 back-to-back in a single process. This is ideal for ensuring full reproducibility or generating the complete set of report assets in a single overnight run.
+
+2.  **Parallel / Distributed Session Execution:**
+    The experiment runners located in `experiments/` (`session1.py`, `session2.py`, `session3.py`) are designed as **standalone units**.
+    - They can be executed independently of the master script.
+    - **Scalability:** These scripts can be duplicated (e.g., `session2_partA.py`, `session2_partB.py`) and their internal `RUN_CONFIG` modified to target specific datasets or algorithms.
+    - **Merging:** This allows you to distribute heavy computational loads across multiple terminals or machines. The `analysis/results_compiler.py` utility is specifically built to detect, ingest, and merge these disparate result CSVs into a single master file for the final report.
+
+## Project Structure
+
 ```text
 .
-├── algorithms/                     # Core clustering algorithm implementations
-│   ├── __init__.py                 # Package initialization
-│   ├── agg_clustering.py           # Wrapper for Sklearn Agglomerative Clustering (float32 optimized)
-│   ├── fuzzy_c_means.py            # Unified class for Standard (Bezdek) and Suppressed (Fan et al.) FCM
-│   ├── gmm_clustering.py           # Wrapper for Sklearn Gaussian Mixture Models (Singularity safe)
-│   ├── kernel_kmeans.py            # Improved K-Means: Intelligent Kernel K-Means (Handhayani et al.)
-│   ├── kmeans.py                   # Vectorized implementation of Standard K-Means
-│   ├── kmeansfekm.py               # Improved K-Means: Far Efficient K-Means (Mishra et al.)
-│   └── pca.py                      # Custom Principal Component Analysis implementation
+├── main.py                         # Master execution script (Runs all sessions)
+├── requirements.txt                # Python dependencies
+├── README.md                       # Project documentation
 │
-├── datasets/                       # Source data files (.arff format)
-│   ├── adult.arff
-│   ├── mushroom.arff
-│   └── pen-based.arff
+├── algorithms/                     # [SOURCE] Clustering & Reduction Implementations
+│   ├── __init__.py
+│   ├── agg_clustering.py           # Wrapper for Agglomerative Clustering
+│   ├── gmm_clustering.py           # Wrapper for Gaussian Mixture Models
+│   ├── kmeans.py                   # Standard K-Means (Lloyd's Algorithm)
+│   ├── kmeansfekm.py               # Far Efficient K-Means (FEKM) - Mishra et al.
+│   ├── kernel_kmeans.py            # Intelligent Kernel K-Means - Handhayani et al.
+│   ├── fuzzy_c_means.py            # Fuzzy C-Means (Standard & Suppressed)
+│   └── pca.py                      # Custom PCA Implementation
 │
-├── plots/                          # (Generated) Output directory for 2D/3D visualization plots
+├── analysis/                       # [SCRIPTS] Reporting & Visualization
+│   ├── __init__.py
+│   ├── report_generator.py         # Generates Elbow plots, BIC graphs, and Summary Tables
+│   ├── results_compiler.py         # Merges distributed result CSVs into a master file
+│   └── visualization.py            # PCA vs t-SNE visualization pipeline
 │
-├── results_master/                 # (Generated) Combined output directory from main.py master run
-│   └── run_[TIMESTAMP]/            # Unique folder per execution
-│       ├── by_algorithm/           # Results aggregated by algorithm
-│       ├── by_dataset/             # Results aggregated by dataset
-│       └── partial/                # Checkpoint files
+├── experiments/                    # [SCRIPTS] Session Runners
+│   ├── __init__.py
+│   ├── session1.py                 # Runner for Standard Algorithms
+│   ├── session2.py                 # Runner for Improved K-Means & Fuzzy
+│   └── session3.py                 # Runner for PCA + Clustering
 │
-├── results_session1/               # (Generated) Session 1 results (Agglomerative / GMM)
-│   └── run_[TIMESTAMP]/            # Unique folder per execution to support parallel runs
-│       ├── by_algorithm/           # Results aggregated by algorithm
-│       ├── by_dataset/             # Results aggregated by dataset
-│       └── partial/                # Checkpoint files saved during execution
-│
-├── results_session2/               # (Generated) Session 2 results (K-Means Variants / Fuzzy)
-│   └── run_[TIMESTAMP]/            # Unique folder per execution to support parallel runs
-│       ├── by_algorithm/           # Results aggregated by algorithm
-│       ├── by_dataset/             # Results aggregated by dataset
-│       └── partial/                # Checkpoint files saved during execution
-│
-├── results_session3/               # (Generated) Session 3 results (PCA + Reduced Clustering)
-│   └── run_[TIMESTAMP]/            # Unique folder per execution to support parallel runs
-│       ├── by_algorithm/           # Results aggregated by algorithm
-│       ├── by_dataset/             # Results aggregated by dataset
-│       └── partial/                # Checkpoint files saved during execution
-│
-├── utils/                          # Data processing and validation utilities
-│   ├── __init__.py                 # Package initialization
-│   ├── clustering_metrics.py       # Validation metrics (Purity, F-Measure, ARI, Davies-Bouldin)
-│   └── parser.py                   # Data loading, One-Hot Encoding, and memory optimization (float32)
-│
-├── experiment_runner_session1.py   # Individual runner for Session 1 (Agg/GMM)
-├── experiment_runner_session2.py   # Individual runner for Session 2 (KMeans/Fuzzy)
-├── experiment_runner_session3.py   # Individual runner for Session 3 (PCA reduction)
-├── main.py                         # Master script executing all sessions sequentially
-├── results_compiler.py             # Utility to merge distributed result CSVs into a master file
-└── visualization.py                # Script for generating PCA vs t-SNE comparison plots
+└── utils/                          # [SOURCE] Helpers
+    ├── __init__.py
+    ├── parser.py                   # ARFF Loader & Preprocessing
+    └── clustering_metrics.py       # Validation Metrics (Purity, F-Measure, ARI)
 ```
+
+## Output Directory Structure
+Upon execution, the project generates specific directories to organize experimental results, intermediate checkpoints, and final report assets.
+
+```text
+.
+├── results_master/                 # Generated by main.py or results_compiler.py
+│   └── run_[TIMESTAMP]/            # Unique folder per execution (prevents overwriting)
+│       ├── master_results_final.csv    # The combined dataset used for the final report
+│       ├── partial/                    # Intermediate checkpoints (saved every N iterations)
+│       ├── by_dataset/                 # Results split by dataset (e.g., adult_results.csv)
+│       └── by_algorithm/               # Results split by algorithm (e.g., KMeans_Standard.csv)
+│
+├── results_session{1,2,3}/         # Output from individual session runners (if run independently)
+│   └── run_[TIMESTAMP]/            # Follows the same internal structure as results_master
+│
+├── report_assets/                  # Generated by analysis.report_generator
+│   ├── Best_Configurations_Summary.csv # Tables comparing top-performing algorithms
+│   ├── Best_Configurations_Summary.md  # Markdown version for easy copy-pasting
+│   ├── [Dataset]_Elbow_KMeans.png      # Elbow Method plots
+│   ├── [Dataset]_BIC_GMM.png           # Bayesian Information Criterion plots
+│   └── Param_[Type]_[Name].png         # Parameter impact charts (e.g., Linkage, Alpha)
+│
+└── plots/                          # Generated by analysis.visualization
+    ├── [Dataset]_01_GroundTruth.png        # Original classes visualized (PCA vs t-SNE)
+    ├── [Dataset]_02_Clustering_Original.png # FEKM clustering on raw data
+    ├── [Dataset]_03_Reconstruction.png     # PCA Reconstruction quality check
+    └── [Dataset]_04_Clustering_Reduced.png # FEKM clustering on PCA-reduced data
+```
+
+## Project Setup & Installation (PyCharm)
+
+1.  **Open the Project**
+    - In PyCharm, go to **File > Open**.
+    - Navigate to and select the main project folder.
+
+2.  **Create the Virtual Environment (venv)**
+    - Go to **PyCharm > Settings** (macOS) or **File > Settings** (Windows/Linux).
+    - Navigate to **Project: [Your Project Name] > Python Interpreter**.
+    - Click the **gear icon > Add...**.
+    - Select **Virtualenv Environment** on the left.
+    - Ensure **New environment** is selected and the **Location** points to a `venv` folder inside your project.
+    - **Base Interpreter:** Select **Python 3.11**.
+      > **Requirements Note:** While this codebase is technically compatible with Python 3.8+, **Python 3.11** was used for development to  comply with the assignment requirements.
+    - Click **OK**. PyCharm will create the `venv` and set it as the project interpreter.
+
+3.  **Install Dependencies**
+    - Open the **Terminal** tab at the bottom of PyCharm.
+    - Ensure the `(venv)` prefix is visible in your terminal prompt.
+    - Run the following command to install all required packages:
+        ```bash
+        pip install -r requirements.txt
+        ```
+
+4.  **Dataset Setup**
+    - Ensure the `datasets/` directory exists in the project root.
+    - Place `adult.arff`, `mushroom.arff`, and `pen-based.arff` inside it.
+
+## Configuration
+
+The experiment pipeline is controlled via the `RUN_CONFIG` dictionary at the top of `main.py`. You can toggle specific sessions or datasets on/off to save time during testing.
+
+**Example Configuration (`main.py`):**
+```python
+RUN_CONFIG = {
+    "datasets": {
+        "pen-based": True,
+        "adult": True,  
+        "mushroom": True
+    },
+    "algorithms": {
+        "Agglomerative": True,      # Session 1
+        "GMM": True,                # Session 1
+        "KMeans_Variants": False,   # Session 2 (Skipped)
+        "Fuzzy_Clustering": False,  # Session 2 (Skipped)
+        "PCA_Clustering": False     # Session 3 (Skipped)
+    }
+}
+```
+> **Performance Note:** The Adult dataset contains ~48,000 instances. The FEKM (Far Efficient K-Means) initialization involves a pairwise distance calculation ($O(N^2)$) which requires approximately 9 GB of RAM. Ensure your machine has sufficient memory before enabling the Adult dataset for Session 2.   
+
+## Execution Guide
+### 1. **Run Full Experiments (The Master Script)**
+To execute the complete experimental pipeline (Sessions 1, 2, and 3) sequentially:
+    ```Bash
+    python main.py
+    ```
+   - **What it does:** Runs all algorithms across all datasets, computes validation metrics (ARI, Purity, F-Measure, DBI), and saves results to CSV.
+   - **Output:** `results_master/run_[TIMESTAMP]/master_results_final.csv` 
+
+### 2. **Generate Report Assets**
+After running the experiments, generate the specific tables and graphs required for the PDF report:
+    ```Bash
+    python -m analysis.report_generator
+    ```
+   - **What it does:** Reads the master results CSV and produces:
+     - Elbow Method Plots (Inertia vs K)
+     - BIC Score Plots (for GMM)
+     - "Best Configuration" Summary Tables (Markdown & CSV)
+     - Parameter Impact Plots (Linkage comparison, Fuzzy Alpha comparison)
+   - **Output:** `report_assets/`  
+
+### 3. **Run Visualization Pipeline**
+To generate 2D scatter plots comparing your Custom PCA against t-SNE, and to visualize clustering results:
+    ```Bash
+    python -m analysis.visualization
+    ```
+  - **What it does:**
+    - Runs Custom PCA and plots Reconstruction Quality.
+    - Runs t-SNE (sklearn) for comparison.
+    - Plots "Ground Truth" vs "Improved K-Means" results side-by-side.
+  - **Output:** `plots/`
+
+## Key Algorithms Implemented
+- **FEKM (Far Efficient K-Means):An improved initialization strategy that deterministically selects centroids using a "farthest-point" heuristic to avoid local minima [1].
+- **Intelligent Kernel K-Means:** A non-linear clustering algorithm using the Kernel Trick (RBF) and a "Center-of-Mass" initialization strategy [2].
+- **Suppressed Fuzzy C-Means (s-FCM):** A variation of standard FCM that uses a suppression parameter $\alpha$ to modify membership degrees, improving convergence speed and cluster crispness [3].
+- **Custom PCA:** A manual implementation of Principal Component Analysis (Covariance Matrix $\to$ Eigen Decomposition $\to$ Projection).
+
+## References
+
+### Core Algorithms
+[1] MacQueen, J. (1967). "Some methods for classification and analysis of multivariate observations". *Proceedings of the 5th Berkeley Symposium on Mathematical Statistics and Probability*, pp. 281-297. (Source for Standard K-Means Initialization logic).
+[2] Bezdek, J.C., Ehrlich, R., & Full, W. (1984). "FCM: The fuzzy c-means clustering algorithm". *Computers & Geosciences*, 10(2-3), pp. 191-203. (Source for Standard FCM logic).
+[3] Celebi, M.E., Kingravi, H.A., & Vela, P.A. (2013). "A Comparative Study of Efficient Initialization Methods for the K-Means Clustering Algorithm". *Expert Systems with Applications*, 40(1), pp. 200-210. (Source for Initialization efficiency comparison).
+
+### Advanced Implementations
+[4] Mishra, B.K., Rath, A.K., Nanda, S.K., & Baidyanath, R.R. (2019). "Efficient Intelligent Framework for Selection of Initial Cluster Centers". *I.J. Intelligent Systems and Applications*, 8, 44-55. (Source for FEKM implementation).
+[5] Handhayani, T., & Hiryanto, L. (2015). "Intelligent Kernel K-Means for Clustering Gene Expression". *Procedia Computer Science*, 59, 171-177. (Source for Intelligent Kernel K-Means implementation).
+[6] Fan, J.L., Zhen, W.Z., & Xie, W.X. (2003). "Suppressed fuzzy c-means clustering algorithm". *Pattern Recognition Letters*, 24, pp. 1607-1612. (Source for s-FCM implementation).
+
+### Visualization
+[7] Van der Maaten, L., & Hinton, G. (2008). "Visualizing Data using t-SNE". *Journal of Machine Learning Research*, 9, 2579-2605. (Reference for t-SNE visualization).

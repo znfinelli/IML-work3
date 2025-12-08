@@ -1,14 +1,48 @@
+"""
+Fuzzy C-Means (FCM) and Suppressed FCM (s-FCM) Implementation.
+
+This module provides a unified implementation of Fuzzy C-Means algorithms
+as required by Task 1.6 of the assignment. It supports both the standard
+FCM algorithm (Bezdek) and the Suppressed FCM variant (Fan et al.) via
+the `alpha` parameter.
+
+References
+----------
+[1] Bezdek, J.C., Ehrlich, R., Full, W., "FCM: The fuzzy c-means clustering
+    algorithm", 1984, Computers & Geosciences, 10(2-3), pp. 191-203.
+[2] Fan, J.L., Zhen, W.Z., Xie, W.X., "Suppressed fuzzy c-means clustering
+    algorithm", 2003, Pattern Recognition Letters, 24, pp. 1607-1612.
+"""
+
 import numpy as np
+from typing import Optional
 
 class FuzzyCMeans:
     """
     Unified Fuzzy C-Means implementation.
 
-    Can behave as either Standard FCM or Suppressed FCM based on the 'alpha' parameter.
+    This class implements both Standard FCM and Suppressed FCM (s-FCM).
+    The algorithm iterates between calculating cluster centers and updating
+    membership degrees until convergence.
 
-    References:
-    1. Standard FCM: Bezdek, J. C. (1981). Pattern recognition with fuzzy objective function algorithms.
-    2. Suppressed FCM: Fan, J. L., et al. (2003). Suppressed fuzzy c-means clustering algorithm.
+    Parameters
+    ----------
+    n_clusters : int
+        The number of clusters to form.
+    m : float, default=2.0
+        The fuzziness exponent (weighting exponent). Must be > 1.
+        Controls the "fuzziness" of the resulting partition.
+    alpha : float, default=1.0
+        The suppression parameter (0 < alpha <= 1).
+        - If alpha = 1.0: Runs Standard FCM (Bezdek, 1984).
+        - If alpha < 1.0: Runs Suppressed FCM (Fan et al., 2003).
+          Recommended value: alpha=0.5 for unknown data structures.
+    max_iters : int, default=300
+        Maximum number of iterations.
+    tol : float, default=1e-5
+        Convergence tolerance based on the change in the membership matrix U.
+    random_state : int, optional
+        Seed for random initialization of the membership matrix.
     """
 
     def __init__(
@@ -18,20 +52,8 @@ class FuzzyCMeans:
             alpha: float = 1.0,
             max_iters: int = 300,
             tol: float = 1e-5,
-            random_state: int = None
+            random_state: Optional[int] = None
     ):
-        """
-        Args:
-            n_clusters (c): Number of clusters.
-            m: Fuzziness exponent (default 2.0). m > 1.
-            alpha: Suppression parameter (0 < alpha <= 1).
-                   - If alpha = 1.0: Runs Standard FCM (Bezdek).
-                   - If alpha < 1.0: Runs Suppressed FCM (Fan et al.).
-                     (Paper recommends alpha=0.5 for unknown data structures).
-            max_iters: Maximum iterations.
-            tol: Tolerance for convergence.
-            random_state: Seed for reproducibility.
-        """
         self.n_clusters = n_clusters
         self.m = m
         self.alpha = alpha
@@ -40,23 +62,30 @@ class FuzzyCMeans:
         self.random_state = random_state
 
         self.centroids = None
-        self.u = None  # Membership matrix
+        self.u = None  # Membership matrix (N x C)
         self.labels_ = None
         self.n_iter_ = 0
 
-    def fit(self, X):
+    def fit(self, X: np.ndarray):
         """
         Execute the clustering algorithm.
+
+        Parameters
+        ----------
+        X : np.ndarray
+            Input data of shape (n_samples, n_features).
+
+        Returns
+        -------
+        self
         """
         if self.random_state is not None:
             np.random.seed(self.random_state)
 
-        # --- FIX APPLIED HERE ---
-        # We need the integer number of rows, not the shape tuple
         n_samples = X.shape[0]
 
         # 1. Initialize U randomly
-        # Constraint: sum of memberships for each point must equal 1
+        # Constraint: sum of memberships for each point must equal 1 (Eq 2b in [1])
         self.u = np.random.rand(n_samples, self.n_clusters)
         self.u = self.u / self.u.sum(axis=1, keepdims=True)
 
@@ -65,6 +94,7 @@ class FuzzyCMeans:
             u_prev = self.u.copy()
 
             # 2. Calculate Centroids (V)
+            # Ref [1]: Equation 11a, p. 193
             # V_j = sum(u_ij^m * x_i) / sum(u_ij^m)
             u_pow_m = self.u ** self.m
             denominator = u_pow_m.sum(axis=0).reshape(-1, 1)
@@ -79,24 +109,28 @@ class FuzzyCMeans:
             )
 
             # 3. Calculate Standard Membership (Bezdek Step)
+            # Ref [1]: Equation 11b, p. 193
             u_bezdek = self._calculate_bezdek_membership(X)
 
             # 4. Apply Suppression (Fan et al. Step)
-            # If alpha=1.0, this returns u_bezdek unchanged.
+            # Ref [2]: Section 4 "S-FCM algorithm", p. 1609
+            # If alpha=1.0, this returns u_bezdek unchanged (Standard FCM)
             self.u = self._suppress_membership(u_bezdek)
 
-            # 5. Check Convergence
+            # 5. Check Convergence (Eq 14 in [1])
             diff = np.max(np.abs(self.u - u_prev))
             if diff < self.tol:
                 break
 
+        # Assign hard labels based on maximum membership
         self.labels_ = np.argmax(self.u, axis=1)
         return self
 
-    def _calculate_bezdek_membership(self, X):
+    def _calculate_bezdek_membership(self, X: np.ndarray) -> np.ndarray:
         """
-        Calculates standard U matrix based on Euclidean distances (Bezdek 1981).
-        Vectorized for performance.
+        Calculates standard U matrix based on Euclidean distances.
+
+        Ref [1]: Eq 11b.
         """
         n_samples = X.shape[0]
         exponent = 2.0 / (self.m - 1)
@@ -118,7 +152,7 @@ class FuzzyCMeans:
         # 4. Compute Membership
         u_new = inv_dist_pow / sum_inv_dist_pow
 
-        # 5. Fix Singularities
+        # 5. Fix Singularities: If a point is exactly at a centroid, membership is 1
         zero_indices = np.where(dist_matrix == 0)
         if len(zero_indices[0]) > 0:
             u_new[zero_indices[0], :] = 0
@@ -126,15 +160,20 @@ class FuzzyCMeans:
 
         return u_new
 
-    def _suppress_membership(self, u_old):
+    def _suppress_membership(self, u_old: np.ndarray) -> np.ndarray:
         """
         Applies suppression logic from Fan et al. (2003).
-        Vectorized for performance.
+
+        "The algorithm prizes the biggest membership and suppresses the others."
+        Ref [2]: Equation on p. 1609.
+
+        u_winner = 1 - alpha + alpha * u_winner
+        u_loser  = alpha * u_loser
         """
         if self.alpha >= 1.0:
             return u_old
 
-        # 1. Suppress everyone by alpha first
+        # 1. Suppress everyone by alpha first (u_loser logic)
         u_new = u_old * self.alpha
 
         # 2. Adjust the winner's membership
@@ -146,34 +185,9 @@ class FuzzyCMeans:
 
         return u_new
 
-    def fit_predict(self, X):
+    def fit_predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Fits the model and returns hard cluster labels.
+        """
         self.fit(X)
         return self.labels_
-
-
-# ---------------------------------------------------------------------
-# Verification Block
-# ---------------------------------------------------------------------
-if __name__ == "__main__":
-    from sklearn.datasets import make_blobs
-
-    # Generate sample data
-    X_test, _ = make_blobs(n_samples=300, centers=3, n_features=2, random_state=42)
-
-    print("--- Test 1: Standard FCM (Bezdek) alpha=1.0 ---")
-    fcm_std = FuzzyCMeans(n_clusters=3, m=2.0, alpha=1.0, random_state=42)
-    fcm_std.fit(X_test)
-    print(f"Converged in {fcm_std.n_iter_} iterations.")
-
-    print("\n--- Test 2: Suppressed FCM (Fan et al.) alpha=0.75 ---")
-    fcm_sup = FuzzyCMeans(n_clusters=3, m=2.0, alpha=0.75, random_state=42)
-    fcm_sup.fit(X_test)
-    print(f"Converged in {fcm_sup.n_iter_} iterations.")
-
-    # Recommended alpha=0.5 from Fan et al. paper
-    print("\n--- Test 3: Heavy Suppression (Fan et al.) alpha=0.5 ---")
-    fcm_heavy = FuzzyCMeans(n_clusters=3, m=2.0, alpha=0.5, random_state=42)
-    fcm_heavy.fit(X_test)
-    print(f"Converged in {fcm_heavy.n_iter_} iterations.")
-
-    print("\n(Note: Lower alpha usually leads to fewer iterations and crisper clusters)")

@@ -1,15 +1,34 @@
+"""
+Experiment Runner for Session 3 (PCA Dimensionality Reduction + Clustering).
+
+This script executes Task 1.2.3: "Use PCA to reduce the dimensionality of your
+three data sets and cluster each with your best improved version of the k-Means".
+
+It performs the following:
+1. Loads datasets.
+2. Applies Custom PCA to reduce dimensions to [2, 3, 5].
+3. Caches the reduced data for efficiency.
+4. Runs improved clustering algorithms (FEKM, Kernel K-Means) on the reduced data.
+5. Computes validation metrics to allow comparison with Session 2 results.
+
+References
+----------
+[1] Work 3 Description, UB, 2025, "1.2.1 Tasks", Point 3, p. 5.
+"""
+
 import os
 import time
 import datetime
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+from typing import List, Dict, Any
 
 # Utilities
 from utils.parser import preprocess_single_arff
 from utils.clustering_metrics import compute_clustering_metrics
 
-# Session 3 Algorithms/Reduction
+# Session 3 Algorithms (PCA + Improved Clustering)
 from algorithms.pca import PCA
 from algorithms.kmeansfekm import KMeansFEKM
 from algorithms.kernel_kmeans import KernelKMeans
@@ -35,31 +54,29 @@ DATASETS_MAP = {
     "mushroom": "datasets/mushroom.arff",
 }
 
-# PCA Configuration
-# We test specific lower dimensions (2D, 3D for viz, 5D for mild reduction)
+# Target Dimensions for PCA
 PCA_COMPONENTS_LIST = [2, 3, 5]
 
-# Clustering Configuration
+# Clustering Parameters
 N_CLUSTERS_LIST = list(range(2, 11))
-N_RUNS = 5  # Reduced runs for PCA experiments to save time (Deterministic PCA)
-PARTIAL_SAVE_INTERVAL = 2
+PARTIAL_SAVE_INTERVAL = 10
 
 
 # ---------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------
-def generate_task_list():
+def generate_task_list() -> List[Dict[str, Any]]:
+    """
+    Generates the grid of PCA + Clustering tasks.
+    """
     tasks = []
     for ds_name, ds_enabled in RUN_CONFIG["datasets"].items():
         if not ds_enabled: continue
 
-        # Iterate through target dimensions
         for n_comp in PCA_COMPONENTS_LIST:
-
-            # 1. FEKM Tasks on Reduced Data
+            # 1. FEKM Tasks (Deterministic)
             if RUN_CONFIG["algorithms"]["KMeansFEKM"]:
                 for k in N_CLUSTERS_LIST:
-                    # FEKM is deterministic, so 1 run is enough per configuration
                     tasks.append({
                         "algorithm": "KMeans_FEKM",
                         "class": KMeansFEKM,
@@ -70,23 +87,25 @@ def generate_task_list():
                         "run_id": 0
                     })
 
-            # 2. Kernel K-Means Tasks on Reduced Data
+            # 2. Kernel K-Means Tasks (Deterministic)
             if RUN_CONFIG["algorithms"]["KernelKMeans"]:
                 for k in N_CLUSTERS_LIST:
-                    # Intelligent Kernel KMeans is also deterministic
                     tasks.append({
                         "algorithm": "Kernel_KMeans",
                         "class": KernelKMeans,
                         "dataset": ds_name,
                         "n_components": n_comp,
                         "n_clusters": k,
-                        "kernel": "rbf",  # Use RBF as standard for Kernel KM
+                        "kernel": "rbf",
                         "run_id": 0
                     })
     return tasks
 
 
-def save_dataframe(data, folder, filename):
+def save_dataframe(data: Any, folder: str, filename: str):
+    """
+    Safely saves data to CSV.
+    """
     if isinstance(data, pd.DataFrame):
         if data.empty: return
         df_to_save = data
@@ -121,15 +140,16 @@ def main():
         print("No tasks configured.")
         return
 
+    print(f"Total tasks scheduled: {len(all_tasks)}")
+
     global_results = []
     current_ds_results = []
     current_ds_name = None
 
-    # Cache for PCA-transformed data to avoid re-computing PCA for every K
-    # Format: { (dataset_name, n_components): X_reduced }
+    # PCA Cache: { (dataset_name, n_components): X_reduced }
+    # Avoids re-computing PCA for every single K-value loop
     pca_cache = {}
 
-    # Raw data cache
     X_orig, y_orig = None, None
 
     pbar = tqdm(all_tasks, unit="exp")
@@ -144,14 +164,12 @@ def main():
 
         # 1. Load Original Data if needed
         if ds_name != current_ds_name:
-            # Save previous dataset results
             if current_ds_name and current_ds_results:
                 save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
                 current_ds_results = []
                 pca_cache = {}  # Clear PCA cache for new dataset
 
             try:
-                # Load fresh data
                 X_orig, y_orig, _ = preprocess_single_arff(DATASETS_MAP[ds_name], drop_class=False)
                 current_ds_name = ds_name
             except Exception as e:
@@ -159,13 +177,12 @@ def main():
                 continue
 
         # 2. Perform or Retrieve PCA Reduction
-        # We check if we can actually reduce to n_components (e.g. can't reduce 4 dims to 5)
+        # Check dimensionality validity
         if n_comp >= X_orig.shape[1]:
-            # Skip invalid reduction requests
+            # Cannot reduce if target dims >= original dims
             continue
 
         if n_comp not in pca_cache:
-            # Run Custom PCA
             try:
                 pca = PCA(n_components=n_comp)
                 X_reduced = pca.fit_transform(X_orig)
@@ -187,7 +204,6 @@ def main():
                 "random_state": task["run_id"]
             }
 
-            # Add algo-specific params
             if "kernel" in task:
                 kwargs["kernel"] = task["kernel"]
             if "metric" in task:
@@ -195,8 +211,6 @@ def main():
 
             # Initialize and Fit
             model = task["class"](**kwargs)
-
-            # fit_predict on X_reduced
             labels = model.fit_predict(X_reduced)
 
             # Record Results
@@ -209,16 +223,15 @@ def main():
                 "n_clusters": task["n_clusters"],
                 "run_id": task["run_id"],
                 "inertia": getattr(model, 'inertia_', 0),
-                "runtime": time.perf_counter() - start_time,
-                "labels": labels
+                "runtime": time.perf_counter() - start_time
             }
 
-            # Compute Metrics using ORIGINAL Ground Truth (y_orig)
-            # Note: DBI is calculated on X_reduced to evaluate cluster compactness in the new space
+            # Compute Metrics
+            # We use X_reduced for DBI (compactness in new space)
+            # We use y_orig for Purity/ARI (ground truth remains valid)
             if y_orig is not None:
                 metrics = compute_clustering_metrics(X_reduced, y_orig, labels)
                 res.update(metrics)
-                del res["labels"]  # Remove labels to save space
 
             global_results.append(res)
             current_ds_results.append(res)
@@ -236,13 +249,13 @@ def main():
 
     if global_results:
         df_final = pd.DataFrame(global_results)
-        df_final.to_csv(os.path.join(base_dir, "session3_final_results.csv"), index=False)
+        df_final.to_csv(os.path.join(base_dir, "session3_final_results_compiled.csv"), index=False)
 
         for algo in df_final['algorithm'].unique():
             safe_name = algo.replace(" ", "_")
             save_dataframe(df_final[df_final['algorithm'] == algo], dirs[3], f"{safe_name}.csv")
 
-        print(f"\nSession 3 Complete. Results in {base_dir}")
+        print(f"\nSession 3 Complete. Results saved in: {base_dir}")
 
 
 if __name__ == "__main__":

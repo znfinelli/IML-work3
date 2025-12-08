@@ -1,9 +1,29 @@
+"""
+Master Execution Script for Work 3.
+
+This script serves as the primary entry point for the project. It orchestrates
+the entire experimental pipeline across all three required sessions:
+1. Standard Clustering (Agglomerative, GMM) [1].
+2. Improved Clustering (K-Means Variants, Fuzzy) [2].
+3. Dimensionality Reduction (PCA) + Clustering [3].
+
+It handles dataset loading, parameter grid generation, algorithm execution,
+metric computation, and result consolidation.
+
+References
+----------
+[1] Work 3 Description, UB, 2025, "1.1 Methodology of the clustering analysis".
+[2] Work 3 Description, UB, 2025, "Tasks 4, 5, 6".
+[3] Work 3 Description, UB, 2025, "1.2 Methodology of the visualization analysis".
+"""
+
 import os
 import time
 import datetime
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+from typing import List, Dict, Any
 
 # Utilities
 from utils.parser import preprocess_single_arff
@@ -28,11 +48,11 @@ RUN_CONFIG = {
         "mushroom": True
     },
     "algorithms": {
-        "Agglomerative": True,  # Session 1
-        "GMM": True,  # Session 1
-        "KMeans_Variants": True,  # Session 2
-        "Fuzzy_Clustering": True,  # Session 2
-        "PCA_Clustering": True  # Session 3
+        "Agglomerative": True,  # Session 1: Standard Hierarchical
+        "GMM": True,  # Session 1: Gaussian Mixtures
+        "KMeans_Variants": True,  # Session 2: Standard, FEKM, Kernel
+        "Fuzzy_Clustering": True,  # Session 2: Fuzzy C-Means (Std & Suppressed)
+        "PCA_Clustering": True  # Session 3: PCA + Improved KMeans
     }
 }
 
@@ -44,11 +64,11 @@ DATASETS_MAP = {
 
 # Global Parameters
 N_CLUSTERS_LIST = list(range(2, 11))
-N_RUNS = 1  #
+N_RUNS = 10  # Number of repeats for stochastic algorithms
 
 # Session 1 Params
 S1_METRICS = ["euclidean", "manhattan", "cosine"]
-GMM_INIT_PARAMS = ["kmeans", "random", "k-means++", "random_from_data"]
+GMM_INIT_PARAMS = ["kmeans", "random", "k-means++"]
 
 # Session 2 Params
 FUZZY_M = [1.5, 2.0, 2.5]
@@ -60,18 +80,24 @@ PARTIAL_SAVE_INTERVAL = 10
 
 
 # ---------------------------------------------------------
-# HELPER & MAIN
+# HELPER FUNCTIONS
 # ---------------------------------------------------------
-def generate_task_list():
+def generate_task_list() -> List[Dict[str, Any]]:
+    """
+    Generates the complete list of experimental tasks based on RUN_CONFIG.
+    """
     tasks = []
     for ds_name, ds_enabled in RUN_CONFIG["datasets"].items():
         if not ds_enabled: continue
 
-        # --- SESSION 1 ---
+        # --- SESSION 1: Standard Algorithms ---
         if RUN_CONFIG["algorithms"]["Agglomerative"]:
             for k in N_CLUSTERS_LIST:
                 for link in ["complete", "average", "single"]:
                     for metric in S1_METRICS:
+                        # Validation: Ward requires Euclidean
+                        if link == 'ward' and metric != 'euclidean': continue
+
                         tasks.append({
                             "session": "S1", "type": "agg", "dataset": ds_name,
                             "n_clusters": k, "linkage": link, "metric": metric
@@ -86,7 +112,7 @@ def generate_task_list():
                             "n_clusters": k, "init_params": init_p, "run_id": seed
                         })
 
-        # --- SESSION 2 ---
+        # --- SESSION 2: Improved & Fuzzy Algorithms ---
         if RUN_CONFIG["algorithms"]["KMeans_Variants"]:
             km_algos = [
                 ("KMeans_Standard", KMeans),
@@ -95,15 +121,16 @@ def generate_task_list():
             ]
             for algo_name, AlgoClass in km_algos:
                 for k in N_CLUSTERS_LIST:
-                    # Determine metric/kernel
+                    # Logic for Metric/Kernel selection
                     if algo_name == "Kernel_KMeans":
                         current_metrics = ["rbf"]
                     else:
                         current_metrics = ["euclidean", "manhattan"]
 
                     for metric in current_metrics:
-                        # Deterministic algorithms run once
+                        # Optimization: Skip redundant runs for deterministic algorithms
                         current_runs = 1 if algo_name in ["KMeans_FEKM", "Kernel_KMeans"] else N_RUNS
+
                         for seed in range(current_runs):
                             task = {
                                 "session": "S2", "type": "kmeans", "class": AlgoClass,
@@ -129,9 +156,8 @@ def generate_task_list():
                                 "m": m, "alpha": alpha, "run_id": seed
                             })
 
-        # --- SESSION 3 (PCA) ---
+        # --- SESSION 3: PCA + Clustering ---
         if RUN_CONFIG["algorithms"]["PCA_Clustering"]:
-            # We run FEKM and KernelKMeans on Reduced Data
             pca_algos = [
                 ("KMeans_FEKM", KMeansFEKM),
                 ("Kernel_KMeans", KernelKMeans)
@@ -143,9 +169,8 @@ def generate_task_list():
                             "session": "S3", "type": "kmeans", "class": AlgoClass,
                             "algo_name": algo_name, "dataset": ds_name,
                             "n_clusters": k, "run_id": 0,  # Deterministic
-                            "pca_dim": n_comp  # Flag to trigger PCA
+                            "pca_dim": n_comp  # Flag to trigger PCA reduction
                         }
-                        # Set defaults for the algos
                         if algo_name == "Kernel_KMeans":
                             task["kernel"] = "rbf"
                         else:
@@ -155,7 +180,8 @@ def generate_task_list():
     return tasks
 
 
-def save_dataframe(data, folder, filename):
+def save_dataframe(data: Any, folder: str, filename: str):
+    """Safely saves results to CSV."""
     if isinstance(data, pd.DataFrame):
         if data.empty: return
         df_to_save = data
@@ -168,6 +194,9 @@ def save_dataframe(data, folder, filename):
     df_to_save.to_csv(os.path.join(folder, filename), index=False)
 
 
+# ---------------------------------------------------------
+# MAIN EXECUTION
+# ---------------------------------------------------------
 def main():
     session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     base_dir = f"results_master/run_{session_id}"
@@ -178,13 +207,17 @@ def main():
     print(f"MASTER Runner Started: {session_id}")
     all_tasks = generate_task_list()
 
+    if not all_tasks:
+        print("No tasks configured.")
+        return
+
     global_results = []
     current_ds_results = []
     current_ds_name = None
 
     # Data Caches
     X_orig, y_orig = None, None
-    pca_cache = {}  # Stores { n_dim: X_reduced }
+    pca_cache = {}  # { n_dim: X_reduced }
 
     pbar = tqdm(all_tasks, unit="exp")
 
@@ -194,12 +227,12 @@ def main():
         algo = task.get('algo_name', task['type'])
         pbar.set_description(f"[{session}] {ds_name} | {algo} | k={task['n_clusters']}")
 
-        # 1. Load Data if Dataset Changed
+        # 1. Load Data
         if ds_name != current_ds_name:
             if current_ds_name and current_ds_results:
                 save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
                 current_ds_results = []
-                pca_cache = {}  # Clear cache
+                pca_cache = {}  # Clear PCA cache for new dataset
             try:
                 X_orig, y_orig, _ = preprocess_single_arff(DATASETS_MAP[ds_name], drop_class=False)
                 current_ds_name = ds_name
@@ -207,15 +240,14 @@ def main():
                 pbar.write(f"Error loading {ds_name}: {e}")
                 continue
 
-        # 2. Determine Input Matrix X (Original or PCA-Reduced)
+        # 2. Determine Input Matrix X (Original or Reduced)
         X_input = X_orig
         use_pca = "pca_dim" in task
 
         if use_pca:
             n_dim = task["pca_dim"]
-            if n_dim >= X_orig.shape[1]: continue  # Skip invalid reduction
+            if n_dim >= X_orig.shape[1]: continue
 
-            # Check cache
             if n_dim not in pca_cache:
                 try:
                     pca = PCA(n_components=n_dim)
@@ -225,15 +257,17 @@ def main():
                     continue
             X_input = pca_cache[n_dim]
 
-        # 3. Run Algorithms
+        # 3. Algorithm Execution
         start = time.perf_counter()
         res = {}
         try:
             if task["type"] == "agg":
                 res = run_agglomerative_once(X_input, task["n_clusters"], task["metric"], task["linkage"], ds_name)
+
             elif task["type"] == "gmm":
                 res = run_gmm_once(X_input, task["n_clusters"], task["init_params"], ds_name)
                 res["run_id"] = task["run_id"]
+
             elif task["type"] == "kmeans":
                 kwargs = {"n_clusters": task["n_clusters"], "random_state": task["run_id"]}
                 if "kernel" in task:
@@ -250,9 +284,12 @@ def main():
                 }
                 if "metric" in task: res["metric"] = task["metric"]
                 if "kernel" in task: res["kernel"] = task["kernel"]
+
             elif task["type"] == "fuzzy":
-                fcm = FuzzyCMeans(n_clusters=task["n_clusters"], m=task["m"], alpha=task["alpha"],
-                                  random_state=task["run_id"])
+                fcm = FuzzyCMeans(
+                    n_clusters=task["n_clusters"], m=task["m"],
+                    alpha=task["alpha"], random_state=task["run_id"]
+                )
                 labels = fcm.fit_predict(X_input)
                 res = {
                     "dataset": ds_name, "algorithm": task["algo_name"], "n_clusters": task["n_clusters"],
@@ -260,7 +297,7 @@ def main():
                     "run_id": task["run_id"], "labels": labels
                 }
 
-            # Add Metadata
+            # 4. Result Consolidation
             res["session"] = session
             if use_pca:
                 res["preprocessing"] = f"PCA_{task['pca_dim']}D"
@@ -269,7 +306,9 @@ def main():
 
             res["runtime"] = time.perf_counter() - start
 
-            # Metrics (Always compare against Original Ground Truth y_orig)
+            # 5. Validation Metrics
+            # Note: We always compute metrics against original Y labels
+            # DBI is calculated using X_input to reflect cluster quality in the CURRENT space
             if y_orig is not None and "labels" in res:
                 res.update(compute_clustering_metrics(X_input, y_orig, res["labels"]))
                 del res["labels"]
@@ -280,10 +319,14 @@ def main():
         except Exception as e:
             pbar.write(f"Failed: {task} - {e}")
 
+        # Checkpoint
         if (i + 1) % PARTIAL_SAVE_INTERVAL == 0:
             save_dataframe(global_results, dirs[1], f"partial_{session_id}.csv")
 
-    if current_ds_results: save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
+    # Final Saves
+    if current_ds_results:
+        save_dataframe(current_ds_results, dirs[2], f"{current_ds_name}_results.csv")
+
     if global_results:
         df = pd.DataFrame(global_results)
         df.to_csv(os.path.join(base_dir, "master_results_final.csv"), index=False)

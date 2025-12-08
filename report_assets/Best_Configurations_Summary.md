@@ -1,0 +1,26 @@
+| dataset   | algorithm           |   n_clusters |   purity |          ari |   davies_bouldin |   f_measure |     runtime | metric    | linkage   |   param_m |   param_alpha | preprocessing   |
+|:----------|:--------------------|-------------:|---------:|-------------:|-----------------:|------------:|------------:|:----------|:----------|----------:|--------------:|:----------------|
+| adult     | KMeans_Standard     |           10 | 0.821322 |  0.0342605   |         2.47037  |    0.372185 |   1.61647   | manhattan | nan       |     nan   |        nan    | Original        |
+| adult     | GaussianMixture     |          nan | 0.813562 |  0.0669946   |         2.68811  |    0.406351 |   4.91385   | nan       | nan       |     nan   |        nan    | Original        |
+| adult     | FCM_Suppressed_0.75 |            9 | 0.812784 |  0.0531774   |         2.74246  |    0.382574 |   3.61467   | euclidean | nan       |       1.5 |          0.75 | Original        |
+| adult     | FCM_Suppressed_0.5  |           10 | 0.811945 |  0.0261428   |         2.56203  |    0.324649 |   1.86806   | euclidean | nan       |       1.5 |          0.5  | Original        |
+| adult     | FCM_Standard        |           10 | 0.799947 |  0.0910199   |         3.48035  |    0.53105  |   6.33025   | euclidean | nan       |       1.5 |          1    | Original        |
+| adult     | KMeans_FEKM         |           10 | 0.779309 |  0.00136236  |         1.1624   |    0.338409 |   4.54355   | nan       | nan       |     nan   |        nan    | PCA_5D          |
+| adult     | Kernel_KMeans       |            8 | 0.778592 |  0.00846359  |         0.740761 |    0.328968 | 248.916     | nan       | nan       |     nan   |        nan    | PCA_3D          |
+| adult     | Agglomerative       |           10 | 0.760759 | -1.80092e-05 |         0.698587 |    0.749681 |  32.4373    | manhattan | single    |     nan   |        nan    | Original        |
+| mushroom  | FCM_Suppressed_0.5  |            9 | 0.63614  |  0.329655    |         1.86152  |    0.591677 |   0.18912   | euclidean | nan       |       2.5 |          0.5  | Original        |
+| mushroom  | KMeans_Standard     |           10 | 0.634663 |  0.314486    |         1.5532   |    0.572081 |   0.201667  | manhattan | nan       |     nan   |        nan    | Original        |
+| mushroom  | FCM_Suppressed_0.75 |           10 | 0.621861 |  0.310173    |         1.82141  |    0.574742 |   0.290824  | euclidean | nan       |       2.5 |          0.75 | Original        |
+| mushroom  | GaussianMixture     |          nan | 0.611029 |  0.262853    |         1.91809  |    0.518496 |   0.627264  | nan       | nan       |     nan   |        nan    | Original        |
+| mushroom  | KMeans_FEKM         |           10 | 0.60709  |  0.293794    |         1.46219  |    0.56743  |   1.33828   | manhattan | nan       |     nan   |        nan    | Original        |
+| mushroom  | Kernel_KMeans       |           10 | 0.605613 |  0.305329    |         0.795083 |    0.570662 |   1.64058   | nan       | nan       |     nan   |        nan    | PCA_5D          |
+| mushroom  | Agglomerative       |           10 | 0.592319 |  0.270345    |         1.53928  |    0.539173 |   0.877953  | euclidean | complete  |     nan   |        nan    | Original        |
+| mushroom  | FCM_Standard        |           10 | 0.560192 |  0.29063     |         4.13276  |    0.562206 |   2.31246   | euclidean | nan       |       1.5 |          1    | Original        |
+| pen-based | GaussianMixture     |          nan | 0.787482 |  0.65717     |         1.77208  |    0.794448 |   0.485196  | nan       | nan       |     nan   |        nan    | Original        |
+| pen-based | FCM_Suppressed_0.75 |           10 | 0.772289 |  0.600031    |         1.36318  |    0.763778 |   0.0811854 | euclidean | nan       |       2   |          0.75 | Original        |
+| pen-based | FCM_Standard        |           10 | 0.770651 |  0.596364    |         1.36771  |    0.762266 |   0.148817  | euclidean | nan       |       1.5 |          1    | Original        |
+| pen-based | FCM_Suppressed_0.5  |           10 | 0.769742 |  0.599324    |         1.35817  |    0.760785 |   0.057683  | euclidean | nan       |       2   |          0.5  | Original        |
+| pen-based | KMeans_Standard     |           10 | 0.756914 |  0.622072    |         1.41893  |    0.748498 |   0.0362839 | euclidean | nan       |     nan   |        nan    | Original        |
+| pen-based | KMeans_FEKM         |           10 | 0.700418 |  0.511878    |         1.26271  |    0.681892 |   0.28737   | euclidean | nan       |     nan   |        nan    | Original        |
+| pen-based | Kernel_KMeans       |            9 | 0.693959 |  0.53252     |         1.32289  |    0.707714 |  15.3183    | nan       | nan       |     nan   |        nan    | Original        |
+| pen-based | Agglomerative       |           10 | 0.576874 |  0.386766    |         1.52812  |    0.551158 |   0.994728  | manhattan | complete  |     nan   |        nan    | Original        |
