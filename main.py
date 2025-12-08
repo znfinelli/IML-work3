@@ -44,7 +44,7 @@ DATASETS_MAP = {
 
 # Global Parameters
 N_CLUSTERS_LIST = list(range(2, 11))
-N_RUNS = 1  #
+N_RUNS = 10
 
 # Session 1 Params
 S1_METRICS = ["euclidean", "manhattan", "cosine"]
