@@ -165,7 +165,7 @@ To generate 2D scatter plots comparing your Custom PCA against t-SNE, and to vis
   - **Output:** `plots/`
 
 ## Key Algorithms Implemented
-- **FEKM (Far Efficient K-Means):An improved initialization strategy that deterministically selects centroids using a "farthest-point" heuristic to avoid local minima [1].
+- **FEKM (Far Efficient K-Means):** An improved initialization strategy that deterministically selects centroids using a "farthest-point" heuristic to avoid local minima [1].
 - **Intelligent Kernel K-Means:** A non-linear clustering algorithm using the Kernel Trick (RBF) and a "Center-of-Mass" initialization strategy [2].
 - **Suppressed Fuzzy C-Means (s-FCM):** A variation of standard FCM that uses a suppression parameter $\alpha$ to modify membership degrees, improving convergence speed and cluster crispness [3].
 - **Custom PCA:** A manual implementation of Principal Component Analysis (Covariance Matrix $\to$ Eigen Decomposition $\to$ Projection).
