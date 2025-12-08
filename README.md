@@ -184,3 +184,7 @@ To generate 2D scatter plots comparing your Custom PCA against t-SNE, and to vis
 
 ### Visualization
 [7] Van der Maaten, L., & Hinton, G. (2008). "Visualizing Data using t-SNE". *Journal of Machine Learning Research*, 9, 2579-2605. (Reference for t-SNE visualization).
+
+### Course Materials
+[8] UB (2025). "Introduction to Machine Learning: Work 3 - Clustering and visualization exercise". Universitat de Barcelona, Course 2025-2026. (Source for project requirements and constraints).
+[9] Salamó, M. (2025). "Support Slides: Sessions 1-4". Universitat de Barcelona, Introduction to Machine Learning. (Source for mathematical definitions of Purity and F-Measure).
