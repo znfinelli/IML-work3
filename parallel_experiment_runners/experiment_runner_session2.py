@@ -245,7 +245,7 @@ def main():
 
     if global_results:
         df_final = pd.DataFrame(global_results)
-        df_final.to_csv(os.path.join(base_dir, "session2_final_results.csv"), index=False)
+        df_final.to_csv(os.path.join(base_dir, "session2_final_results_compiled.csv"), index=False)
 
         for algo in df_final['algorithm'].unique():
             safe_name = algo.replace(" ", "_")
