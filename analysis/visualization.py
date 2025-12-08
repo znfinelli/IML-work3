@@ -1,3 +1,19 @@
+"""
+Visualization Pipeline for Work 3.
+
+This script executes the visualization tasks defined in Section 1.2 of the
+assignment. It orchestrates the following:
+1. Loading and preprocessing datasets.
+2. Dimensionality reduction using Custom PCA (Task 1.2.1) and t-SNE (Task 1.2.4).
+3. Visual comparison of reconstruction quality (Task 1.2.1 Step 9).
+4. Comparison of clustering results (FEKM) on original vs. reduced data (Task 1.2.3).
+
+References
+----------
+[1] Work 3 Description, UB, 2025, "1.2 Methodology of the visualization analysis", pp. 5-6.
+[2] Support Slides Session 4, Salamó, 2025, "Dimensionality reduction & visualization".
+"""
+
 import os
 import time
 import numpy as np
@@ -6,15 +22,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.manifold import TSNE
 
-# Import your Custom Algorithms
+# Import Custom Algorithms
 from algorithms.pca import PCA
-from algorithms.kmeansfekm import KMeansFEKM  # Using FEKM as the "Improved" algorithm
+from algorithms.kmeansfekm import KMeansFEKM
 from utils.parser import preprocess_single_arff
 
 # ---------------------------------------------------------
 # CONFIGURATION
 # ---------------------------------------------------------
-# We use the same datasets, but we will downsample them for t-SNE speed
 DATASETS_MAP = {
     "pen-based": "datasets/pen-based.arff",
     "adult": "datasets/adult.arff",
@@ -22,13 +37,30 @@ DATASETS_MAP = {
 }
 
 OUTPUT_DIR = "../plots"
-VIZ_SAMPLES = 3000  # Max samples for t-SNE (Safety limit for speed)
+VIZ_SAMPLES = 3000  # Downsampling limit for t-SNE performance
 
 
-def plot_reconstruction(X_orig, X_reconst, title, filename):
+def plot_reconstruction(
+        X_orig: np.ndarray,
+        X_reconst: np.ndarray,
+        title: str,
+        filename: str
+):
     """
-    Plot Original vs Reconstructed data on feature 1 & 2.
-    This explicitly demonstrates PCA reconstruction quality (Task 1.2.1 Step 9).
+    Plots Original vs Reconstructed data (Features 1 & 2).
+
+    Satisfies Task 1.2.1 Step 9: "Reconstruct the data set... Additionally, plot the data set."
+
+    Parameters
+    ----------
+    X_orig : np.ndarray
+        Original dataset.
+    X_reconst : np.ndarray
+        Reconstructed dataset after PCA inverse transform.
+    title : str
+        Plot title.
+    filename : str
+        Output filename.
     """
     # Need at least 2 features to make a 2D scatter
     if X_orig.shape[1] < 2:
@@ -37,8 +69,7 @@ def plot_reconstruction(X_orig, X_reconst, title, filename):
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
-    # 1) Original data: feature 1 vs feature 2
-    # This satisfies Task 1.2.1 Step 2 (Plot original dataset)
+    # 1) Original data: feature 1 vs feature 2 [1]
     sns.scatterplot(
         x=X_orig[:, 0],
         y=X_orig[:, 1],
@@ -46,13 +77,12 @@ def plot_reconstruction(X_orig, X_reconst, title, filename):
         alpha=0.5,
         s=15,
     )
-    axes[0].set_title("Original Data (feat 1 vs feat 2)")
+    axes[0].set_title("Original Data (Feat 1 vs Feat 2)")
     axes[0].set_xlabel("Feature 1")
     axes[0].set_ylabel("Feature 2")
     axes[0].grid(True, linestyle="--", alpha=0.3)
 
-    # 2) Reconstructed data: feature 1 vs feature 2
-    # This satisfies Task 1.2.1 Step 9 (Reconstruct and plot)
+    # 2) Reconstructed data
     sns.scatterplot(
         x=X_reconst[:, 0],
         y=X_reconst[:, 1],
@@ -73,19 +103,41 @@ def plot_reconstruction(X_orig, X_reconst, title, filename):
     print(f"  [Saved reconstruction plot] {filename}")
 
 
-def plot_side_by_side(X_pca, X_tsne, labels, title, filename, dataset_name):
+def plot_side_by_side(
+        X_pca: np.ndarray,
+        X_tsne: np.ndarray,
+        labels: np.ndarray,
+        title: str,
+        filename: str,
+        dataset_name: str
+):
     """
     Generates a side-by-side plot: PCA (Left) vs t-SNE (Right).
-    Satisfies Task 1.2.1 Step 8 (Plot new subspace) and Section 1.2.2.
+
+    Satisfies Task 1.2.1 Step 8 ("Plot the new subspace") and Task 1.2.4.
+
+    Parameters
+    ----------
+    X_pca : np.ndarray
+        Data projected onto first 2 principal components.
+    X_tsne : np.ndarray
+        Data projected via t-SNE.
+    labels : np.ndarray
+        Class labels or cluster assignments for coloring.
+    title : str
+        Main title for the figure.
+    filename : str
+        Output filename.
+    dataset_name : str
+        Name of dataset for subtitle.
     """
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
-    # Helper to plot on a specific axis
     def plot_on_axis(ax, data, title_suffix):
         df_plot = pd.DataFrame(data, columns=['C1', 'C2'])
         df_plot['label'] = labels
 
-        # Check if we have too many categories (e.g. noise)
+        # Handle high cardinality (e.g. noise points) by switching palettes
         n_colors = len(np.unique(labels))
         palette = "viridis" if n_colors > 10 else "tab10"
 
@@ -105,7 +157,6 @@ def plot_side_by_side(X_pca, X_tsne, labels, title, filename, dataset_name):
     plt.suptitle(title, fontsize=16)
     plt.tight_layout()
 
-    # Save
     save_path = os.path.join(OUTPUT_DIR, filename)
     plt.savefig(save_path)
     plt.close()
@@ -113,6 +164,9 @@ def plot_side_by_side(X_pca, X_tsne, labels, title, filename, dataset_name):
 
 
 def run_visualizations():
+    """
+    Main execution loop for visualization tasks.
+    """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print(f"Starting Visualization Pipeline. Saving to '{OUTPUT_DIR}/'...\n")
 
@@ -120,26 +174,30 @@ def run_visualizations():
         print(f"--- Processing {ds_name} ---")
 
         # 1. Load Data
+        if not os.path.exists(file_path):
+            print(f"  [Error] File not found: {file_path}")
+            continue
+
         try:
             X, y, _ = preprocess_single_arff(file_path, drop_class=False)
         except Exception as e:
-            print(f"Skipping {ds_name}: {e}")
+            print(f"  [Error] Processing {ds_name}: {e}")
             continue
 
-        # 2. Downsample for Visualization Speed
+        # 2. Downsample for Visualization Speed (Optional but recommended)
         if X.shape[0] > VIZ_SAMPLES:
             print(f"  Downsampling from {X.shape[0]} to {VIZ_SAMPLES} for t-SNE...")
-            np.random.seed(42)  # Deterministic for report
+            np.random.seed(42)
             indices = np.random.choice(X.shape[0], VIZ_SAMPLES, replace=False)
             X = X[indices]
             if y is not None:
                 y = y[indices]
 
         # 3. Run Custom PCA (From Scratch)
-        # Task: Print Covariance/Eigenvalues to console [PDF 1.2.1]
+        # Requirement: "Show this information in console" (verbose=True) [1]
         print(f"  Running Custom PCA (2 Components)...")
-        # Ensure your algorithms/pca.py supports verbose=True to print Steps 4, 5, 6
         pca = PCA(n_components=2, verbose=True)
+
         start = time.time()
         X_pca = pca.fit_transform(X)
         print(f"    PCA Done in {time.time() - start:.2f}s")
@@ -153,9 +211,9 @@ def run_visualizations():
             f"PCA Reconstruction Quality ({ds_name})",
             f"{ds_name}_03_Reconstruction.png",
         )
-        # ----------------------------------------------------
 
         # 4. Run t-SNE (Sklearn)
+        # Task 1.2.4: Visualize using t-SNE [1]
         print(f"  Running t-SNE (2 Components)...")
         start = time.time()
         tsne = TSNE(n_components=2, random_state=42, n_jobs=-1)
@@ -172,7 +230,7 @@ def run_visualizations():
             )
 
         # 6. Plot 2: Improved K-Means Clustering (Original Data)
-        # Satisfies: "visualize... improved version of the k-Means... WITHOUT dimensionality reduction" [PDF 130]
+        # Requirement: "visualize... result of... k-Means... WITHOUT dimensionality reduction" [1]
         k = len(np.unique(y)) if y is not None else 3
         print(f"  Running FEKM Clustering on Original Data (k={k})...")
 
@@ -187,10 +245,10 @@ def run_visualizations():
         )
 
         # 7. Plot 3: Improved K-Means Clustering (Reduced Data)
-        # Satisfies: "visualize... improved version of the k-Means... WITH dimensionality reduction" [PDF 130]
+        # Requirement: "visualize... result of... k-Means... WITH dimensionality reduction" [1]
         print(f"  Running FEKM Clustering on PCA-Reduced Data (k={k})...")
 
-        # We perform clustering on the 2D PCA result (X_pca)
+        # Clustering on the 2D PCA result
         fekm_reduced = KMeansFEKM(n_clusters=k, random_state=42)
         labels_fekm_reduced = fekm_reduced.fit_predict(X_pca)
 

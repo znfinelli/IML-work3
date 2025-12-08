@@ -1,38 +1,58 @@
+"""
+Results Compiler Utility.
+
+This script aggregates the distributed results from different experiment sessions
+(Session 1: Standard, Session 2: K-Means/Fuzzy, Session 3: PCA) into a single
+master CSV file. This unified dataset is required to generate the comparative
+tables and graphs for the final report.
+
+References
+----------
+[1] Work 3 Description, UB, 2025, "1.1.2 Presenting and Interpreting Clustering Results", p. 4.
+[2] Work 3 Description, UB, 2025, "1.3 Work to deliver", p. 6.
+"""
+
 import os
 import pandas as pd
 import glob
-from typing import List, Dict
+from typing import Dict, List, Any
 
 # ---------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------
 COMPILATION_CONFIG = {
-    # Directories to scan
+    # Directories to scan for session outputs
     "input_directories": [
         "results_session1",
         "results_session2",
         "results_session3",
     ],
 
-    # PATTERN MATCHING:
+    # Pattern to identify final result files
     "target_pattern": "*_final_results_compiled.csv",
 
-    # --- OUTPUT CONFIGURATION ---
-    # Option 1: Set to a folder name (e.g., "results_master") to create a new folder.
-    # Option 2: Set to "" or None to save directly in the root (iml_work3 directory).
+    # Output destination
     "output_directory": "results_master",
-
-    "output_filename": "master_final_results.csv"
+    "output_filename": "master_results_final.csv"
 }
 
 
 # ---------------------------------------------------------
 # Compilation Logic
 # ---------------------------------------------------------
-def compile_results(config: Dict):
+def compile_results(config: Dict[str, Any]):
     """
-    Scans specified directories for result CSV files matching a pattern
-    and merges them into a single master file.
+    Scans specified directories for result CSV files and merges them.
+
+    This function recursively searches for files matching the target pattern,
+    concatenates them into a pandas DataFrame, handles missing columns
+    (e.g., 'preprocessing' for non-PCA runs), and saves the master file.
+
+    Parameters
+    ----------
+    config : Dict[str, Any]
+        Configuration dictionary containing 'input_directories', 'target_pattern',
+        'output_directory', and 'output_filename'.
     """
     input_dirs = config["input_directories"]
     target_pattern = config["target_pattern"]
@@ -43,11 +63,9 @@ def compile_results(config: Dict):
 
     # Determine full output path
     if output_dir:
-        # If a folder is specified, create it and join path
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, filename)
     else:
-        # If empty/None, save to current root directory
         output_path = filename
 
     all_files = []
@@ -61,7 +79,7 @@ def compile_results(config: Dict):
 
         print(f"Scanning directory: {directory}")
 
-        # Use 'recursive=True' to look inside run_2025... subfolders
+        # Use 'recursive=True' to look inside run_[TIMESTAMP] subfolders
         search_path = os.path.join(directory, "**", target_pattern)
         found_files = glob.glob(search_path, recursive=True)
 
@@ -89,14 +107,15 @@ def compile_results(config: Dict):
 
     master_df = pd.concat(df_list, ignore_index=True)
 
-    # Fill empty preprocessing slots (from Session 1 & 2) with "Original"
+    # 3. Standardization
+    # Session 1 & 2 runs might not have 'preprocessing' column (implied 'Original')
+    # Session 3 (PCA) will have 'preprocessing' = 'PCA'
     if 'preprocessing' in master_df.columns:
         master_df['preprocessing'] = master_df['preprocessing'].fillna('Original')
     else:
-        # Create column if it doesn't exist at all (e.g. only session 1/2 loaded)
         master_df['preprocessing'] = 'Original'
 
-    # 3. Save Compiled File using the calculated output_path
+    # 4. Save Compiled File
     try:
         master_df.to_csv(output_path, index=False)
         print(f"\nCompilation successful.")
@@ -106,10 +125,14 @@ def compile_results(config: Dict):
         print(f"Error saving master file: {e}")
         return
 
-    # 4. Summary
+    # 5. Summary
     print("\n--- Dataset and Algorithm Summary ---")
     if 'dataset' in master_df.columns and 'algorithm' in master_df.columns:
-        summary = master_df.groupby(['dataset', 'algorithm']).size()
+        # Group by preprocessing as well to verify PCA vs Original counts
+        if 'preprocessing' in master_df.columns:
+            summary = master_df.groupby(['dataset', 'algorithm', 'preprocessing']).size()
+        else:
+            summary = master_df.groupby(['dataset', 'algorithm']).size()
         print(summary)
     else:
         print("Columns 'dataset' or 'algorithm' not found. Skipping summary.")
