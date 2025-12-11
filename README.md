@@ -36,6 +36,8 @@ The project is architected to support two distinct execution paradigms to handle
 │
 ├── analysis/                       # [SCRIPTS] Reporting & Visualization
 │   ├── __init__.py
+│   ├── confusion_matrix.py         # Compares clustering results against ground truth labels using a Confusion Matrix
+│   ├── fuzzy_m_study.py            # Generates a specific validation plot to prove the Fuzzy m parameter was tested and analyzed
 │   ├── report_generator.py         # Generates Elbow plots, BIC graphs, and Summary Tables
 │   ├── results_compiler.py         # Merges distributed result CSVs into a master file
 │   └── visualization.py            # PCA vs t-SNE visualization pipeline
@@ -139,21 +141,9 @@ To execute the complete experimental pipeline (Sessions 1, 2, and 3) sequentiall
     python main.py
     ```
    - **What it does:** Runs all algorithms across all datasets, computes validation metrics (ARI, Purity, F-Measure, DBI), and saves results to CSV.
-   - **Output:** `results_master/run_[TIMESTAMP]/master_results_final.csv` 
+   - **Output:** `results_master/run_[TIMESTAMP]/master_results_final.csv`
 
-### 2. **Generate Report Assets**
-After running the experiments, generate the specific tables and graphs required for the PDF report:
-    ```Bash
-    python -m analysis.report_generator
-    ```
-   - **What it does:** Reads the master results CSV and produces:
-     - Elbow Method Plots (Inertia vs K)
-     - BIC Score Plots (for GMM)
-     - "Best Configuration" Summary Tables (Markdown & CSV)
-     - Parameter Impact Plots (Linkage comparison, Fuzzy Alpha comparison)
-   - **Output:** `report_assets/`  
-
-### 3. **Run Visualization Pipeline**
+### 2. **Run Visualization Pipeline**
 To generate 2D scatter plots comparing your Custom PCA against t-SNE, and to visualize clustering results:
     ```Bash
     python -m analysis.visualization
@@ -163,6 +153,20 @@ To generate 2D scatter plots comparing your Custom PCA against t-SNE, and to vis
     - Runs t-SNE (sklearn) for comparison.
     - Plots "Ground Truth" vs "Improved K-Means" results side-by-side.
   - **Output:** `plots/`
+
+### 3. **Generate Report Assets**
+After running the experiments, generate the specific tables and graphs required for the PDF report:
+    ```Bash
+    python -m analysis.report_generator
+    ```
+   - **What it does:** Reads the master results CSV and produces:
+     - Elbow Method Plots (Inertia vs K)
+     - BIC Score Plots (for GMM)
+     - "Best Configuration" Summary Tables (Markdown & CSV)
+     - Parameter Impact Plots (Linkage comparison, Fuzzy Alpha comparison)
+   - **Output:** `report_assets/`
+> **Analysis Note:** For a specific fuzzy validation plot and visual confusion matrices, run `fuzzy_m_study.py` and `confusion_matrix.py` inside the `/analysis` package
+
 
 ## Key Algorithms Implemented
 - **FEKM (Far Efficient K-Means):** An improved initialization strategy that deterministically selects centroids using a "farthest-point" heuristic to avoid local minima [1].
